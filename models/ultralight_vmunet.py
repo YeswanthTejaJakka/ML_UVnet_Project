@@ -11,9 +11,25 @@ except (ImportError, Exception):
     MAMBA_CUDA_AVAILABLE = False
 
 
+@torch.jit.script
+def _fast_mamba_scan(dA: torch.Tensor, Bx: torch.Tensor, C_ssm: torch.Tensor) -> torch.Tensor:
+    batch = dA.size(0)
+    seqlen = dA.size(1)
+    d_inner = dA.size(2)
+    d_state = dA.size(3)
+    
+    h = torch.zeros((batch, d_inner, d_state), device=dA.device, dtype=dA.dtype)
+    y_out = torch.empty((batch, seqlen, d_inner), device=dA.device, dtype=dA.dtype)
+    
+    for t in range(seqlen):
+        h = dA[:, t] * h + Bx[:, t]
+        y_out[:, t] = (h * C_ssm[:, t].unsqueeze(1)).sum(dim=-1)
+    return y_out
+
+
 class PyTorchMamba(nn.Module):
     """
-    Pure PyTorch fallback implementation of Mamba SSM block.
+    Accelerated JIT-compiled PyTorch implementation of Mamba SSM block.
     Guarantees that training and evaluation never hang or fail on systems
     where custom CUDA kernels cannot be compiled.
     Matches the exact state-space math, input/output dims, and parameter count.
@@ -86,16 +102,10 @@ class PyTorchMamba(nn.Module):
         # Discretization: dA = exp(dt * A), dB = dt * B
         dA = torch.exp(torch.einsum("bld,dn->bldn", dt, A))
         dB = torch.einsum("bld,bln->bldn", dt, B_ssm)
+        Bx = dB * x_act.unsqueeze(-1)
 
-        # Recurrent scan
-        h = torch.zeros(batch, self.d_inner, self.d_state, device=u.device, dtype=u.dtype)
-        y_list = []
-        for t in range(seqlen):
-            h = dA[:, t] * h + dB[:, t] * x_act[:, t, :, None]
-            y_t = torch.einsum("bdn,bn->bd", h, C_ssm[:, t])
-            y_list.append(y_t)
-
-        y = torch.stack(y_list, dim=1)  # [B, L, d_inner]
+        # JIT-compiled fast recurrence scan
+        y = _fast_mamba_scan(dA, Bx, C_ssm)
         y = y + x_act * self.D[None, None, :]
         y = y * F.silu(z)
         out = self.out_proj(y)

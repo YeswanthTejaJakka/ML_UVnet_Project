@@ -70,11 +70,43 @@ def load_config(args):
     return cfg
 
 
-def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device):
+def fast_validate(model, loader, device):
+    """
+    High-speed GPU-vectorized validation computing Dice and IoU in milliseconds.
+    Avoids CPU bottlenecks and distance-transform latency during training loops.
+    """
+    model.eval()
+    dice_list = []
+    iou_list = []
+
+    with torch.no_grad():
+        for batch in loader:
+            images = batch['image'].to(device)
+            masks = batch['mask'].to(device)
+
+            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                preds = (model(images, return_boundary=False) > 0.5).float()
+
+            intersection = (preds * masks).sum(dim=(-2, -1))
+            cardinality = preds.sum(dim=(-2, -1)) + masks.sum(dim=(-2, -1))
+            batch_dice = (2.0 * intersection + 1e-5) / (cardinality + 1e-5)
+            batch_iou = (intersection + 1e-5) / (cardinality - intersection + 1e-5)
+
+            dice_list.append(batch_dice.mean().item())
+            iou_list.append(batch_iou.mean().item())
+
+    return {
+        'overall_dice': float(np.mean(dice_list)) if dice_list else 0.0,
+        'overall_iou': float(np.mean(iou_list)) if iou_list else 0.0,
+    }
+
+
+def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device, scaler=None):
     model.train()
     bce_dice = loss_modules['seg']
     boundary_loss_fn = loss_modules.get('boundary')
     cons_loss_fn = loss_modules.get('consistency')
+    use_amp = (device.type == 'cuda') and (scaler is not None)
 
     total_loss_accum = 0.0
     seg_loss_accum = 0.0
@@ -86,40 +118,46 @@ def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device):
         masks = batch['mask'].to(device)
         boundaries = batch['boundary'].to(device)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         use_boundary = cfg.get('use_boundary_loss', False)
-        if use_boundary:
-            pred_mask, pred_boundary = model(images, return_boundary=True)
-        else:
-            pred_mask = model(images, return_boundary=False)
+        
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            if use_boundary:
+                pred_mask, pred_boundary = model(images, return_boundary=True)
+            else:
+                pred_mask = model(images, return_boundary=False)
 
-        # Baseline segmentation loss
-        loss_seg = bce_dice(pred_mask, masks)
-        total_loss = loss_seg
+            loss_seg = bce_dice(pred_mask, masks)
+            total_loss = loss_seg
+
+            if use_boundary and boundary_loss_fn is not None:
+                lambda_b = cfg.get('lambda_boundary', 1.0)
+                loss_b = boundary_loss_fn(pred_boundary, boundaries, masks)
+                total_loss = total_loss + lambda_b * loss_b
+                b_loss_accum += loss_b.item()
+
+            if cfg.get('use_consistency_loss', False) and cons_loss_fn is not None:
+                sigma = cfg.get('speckle_sigma', 0.15)
+                gamma = cfg.get('contrast_factor', 0.75)
+                corrupt_images = apply_ultrasound_corruption(images, speckle_sigma=sigma, contrast_factor=gamma)
+                pred_corrupt = model(corrupt_images, return_boundary=False)
+
+                lambda_c = cfg.get('lambda_consistency', 1.0)
+                loss_c = cons_loss_fn(pred_corrupt, pred_mask)
+                total_loss = total_loss + lambda_c * loss_c
+                c_loss_accum += loss_c.item()
+
         seg_loss_accum += loss_seg.item()
 
-        # Auxiliary Scale-Aware Boundary loss
-        if use_boundary and boundary_loss_fn is not None:
-            lambda_b = cfg.get('lambda_boundary', 1.0)
-            loss_b = boundary_loss_fn(pred_boundary, boundaries, masks)
-            total_loss = total_loss + lambda_b * loss_b
-            b_loss_accum += loss_b.item()
+        if use_amp and scaler is not None:
+            scaler.scale(total_loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            total_loss.backward()
+            optimizer.step()
 
-        # Ultrasound Corruption-Aware Consistency loss
-        if cfg.get('use_consistency_loss', False) and cons_loss_fn is not None:
-            sigma = cfg.get('speckle_sigma', 0.15)
-            gamma = cfg.get('contrast_factor', 0.75)
-            corrupt_images = apply_ultrasound_corruption(images, speckle_sigma=sigma, contrast_factor=gamma)
-            pred_corrupt = model(corrupt_images, return_boundary=False)
-
-            lambda_c = cfg.get('lambda_consistency', 1.0)
-            loss_c = cons_loss_fn(pred_corrupt, pred_mask)
-            total_loss = total_loss + lambda_c * loss_c
-            c_loss_accum += loss_c.item()
-
-        total_loss.backward()
-        optimizer.step()
         total_loss_accum += total_loss.item()
 
     num_batches = len(loader)
@@ -129,29 +167,6 @@ def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device):
         'boundary_loss': (b_loss_accum / num_batches) if cfg.get('use_boundary_loss') else 0.0,
         'consistency_loss': (c_loss_accum / num_batches) if cfg.get('use_consistency_loss') else 0.0,
     }
-
-
-def validate(model, loader, device):
-    model.eval()
-    tracker = MetricTracker()
-
-    with torch.no_grad():
-        for batch in loader:
-            images = batch['image'].to(device)
-            masks = batch['mask'].to(device)
-            categories = batch['category']
-
-            preds = model(images, return_boundary=False)
-            preds_np = preds.cpu().numpy()
-            masks_np = masks.cpu().numpy()
-
-            for i in range(len(preds_np)):
-                pred_i = preds_np[i, 0]
-                mask_i = masks_np[i, 0]
-                cat_i = categories[i]
-                tracker.update(pred_i, mask_i, category=cat_i)
-
-    return tracker.summary()
 
 
 def main():
@@ -222,27 +237,27 @@ def main():
     if cfg.get('use_consistency_loss', False):
         loss_modules['consistency'] = PerturbationConsistencyLoss(loss_type='mse')
 
-    # 5. Training Loop
+    # 5. Mixed Precision Scaler & Training Loop
+    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == 'cuda'))
     best_val_dice = 0.0
     history = []
 
     for epoch in range(1, epochs + 1):
-        train_res = train_one_epoch(model, train_loader, optimizer, loss_modules, cfg, device)
+        train_res = train_one_epoch(model, train_loader, optimizer, loss_modules, cfg, device, scaler=scaler)
         scheduler.step()
 
-        # Validate every epoch (or every 5 epochs)
-        val_res = validate(model, val_loader, device)
+        # Fast GPU validation (takes milliseconds, avoids CPU bottlenecks)
+        val_res = fast_validate(model, val_loader, device)
 
         curr_lr = optimizer.param_groups[0]['lr']
         val_dice = val_res['overall_dice']
         val_iou = val_res['overall_iou']
-        small_dice = val_res['small_dice']
 
         print(
             f"Epoch [{epoch:03d}/{epochs:03d}] "
             f"Loss: {train_res['total_loss']:.4f} "
             f"(Seg: {train_res['seg_loss']:.4f}, Bnd: {train_res['boundary_loss']:.4f}, Cons: {train_res['consistency_loss']:.4f}) | "
-            f"Val Dice: {val_dice:.4f} | Val IoU: {val_iou:.4f} | Small Dice: {small_dice:.4f} | LR: {curr_lr:.6f}"
+            f"Val Dice: {val_dice:.4f} | Val IoU: {val_iou:.4f} | LR: {curr_lr:.6f}"
         )
 
         record = {
@@ -250,10 +265,6 @@ def main():
             'train_loss': train_res['total_loss'],
             'val_dice': val_dice,
             'val_iou': val_iou,
-            'val_biou': val_res['overall_biou'],
-            'val_hd95': val_res['overall_hd95'],
-            'small_dice': small_dice,
-            'large_dice': val_res['large_dice'],
         }
         history.append(record)
 
