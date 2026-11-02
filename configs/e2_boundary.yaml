@@ -1,0 +1,27 @@
+exp_name: e2_boundary
+description: "UltraLight VM-UNet with Lesion-Scale-Aware Boundary Supervision"
+
+# Data
+data_root: "/content/tn3k"
+img_size: [256, 256]
+fold: 0
+
+# Optimization
+batch_size: 16
+epochs: 150
+lr: 0.001
+weight_decay: 0.01
+scheduler: "cosine"
+min_lr: 0.00001
+
+# Loss configurations
+use_boundary_loss: true
+lambda_boundary: 1.0
+boundary_alpha: 1.0
+boundary_gamma: 0.5
+boundary_min_weight: 1.0
+boundary_max_weight: 5.0
+use_consistency_loss: false
+
+# Model
+aux_boundary_head: true
