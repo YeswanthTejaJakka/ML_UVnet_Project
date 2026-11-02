@@ -3,7 +3,10 @@ import argparse
 import yaml
 import json
 import random
+import shutil
+from datetime import datetime
 import numpy as np
+import pandas as pd
 
 import torch
 from torch.utils.data import DataLoader
@@ -38,6 +41,7 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=None, help='Learning rate')
     parser.add_argument('--save_dir', type=str, default=None, help='Directory to save checkpoints')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--force_retrain', action='store_true', default=False, help='Force retraining even if best_model.pth already exists')
     return parser.parse_args()
 
 
@@ -67,6 +71,7 @@ def load_config(args):
     elif 'save_dir' not in cfg:
         cfg['save_dir'] = os.path.join('checkpoints', cfg.get('exp_name', 'exp'))
 
+    cfg['force_retrain'] = args.force_retrain or cfg.get('force_retrain', False)
     return cfg
 
 
@@ -192,10 +197,33 @@ def main():
     set_seed(42)
 
     device = torch.device(args.device)
-    print(f"=== Starting Experiment: {cfg['exp_name']} on {device} ===")
+    print(f"=== Experiment: {cfg['exp_name']} on {device} ===")
     print(f"Dataset root: {cfg['data_root']} | Fold: {cfg.get('fold', 0)}")
 
     os.makedirs(cfg['save_dir'], exist_ok=True)
+
+    # Check for existing checkpoint
+    best_model_path = os.path.join(cfg['save_dir'], 'best_model.pth')
+    if os.path.exists(best_model_path) and not cfg.get('force_retrain', False):
+        print("\n=======================================================")
+        print(f"✅ Found existing trained checkpoint: {best_model_path}")
+        try:
+            prev_ckpt = torch.load(best_model_path, map_location='cpu')
+            prev_val = prev_ckpt.get('val_dice', 'N/A')
+            print(f"   Best Validation Dice: {prev_val:.4f}" if isinstance(prev_val, float) else f"   Best Validation Dice: {prev_val}")
+        except Exception:
+            pass
+        print("   Skipping re-training to save time.")
+        print("   (Set --force_retrain to True if you want a fresh training run)")
+        print("=======================================================\n")
+        return
+
+    if os.path.exists(best_model_path) and cfg.get('force_retrain', False):
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(cfg['save_dir'], f"best_model_backup_{ts}.pth")
+        shutil.copy(best_model_path, backup_path)
+        print(f"⚠️ Created safety backup of previous model weights: {backup_path}")
+
     with open(os.path.join(cfg['save_dir'], 'config_used.yaml'), 'w') as f:
         yaml.dump(cfg, f)
 
@@ -280,8 +308,12 @@ def main():
         record = {
             'epoch': epoch,
             'train_loss': train_res['total_loss'],
+            'seg_loss': train_res['seg_loss'],
+            'boundary_loss': train_res['boundary_loss'],
+            'consistency_loss': train_res['consistency_loss'],
             'val_dice': val_dice,
             'val_iou': val_iou,
+            'lr': curr_lr,
         }
         history.append(record)
 
@@ -306,11 +338,35 @@ def main():
             }, os.path.join(cfg['save_dir'], 'best_model.pth'))
             print(f"  --> Saved new best model checkpoint! Best Val Dice: {best_val_dice:.4f}")
 
+    # 6. Save JSON history and CSV training log
     with open(os.path.join(cfg['save_dir'], 'training_history.json'), 'w') as f:
         json.dump(history, f, indent=2)
 
-    print(f"\nTraining completed! Best Val Dice achieved: {best_val_dice:.4f}")
-    print(f"Checkpoints saved in: {cfg['save_dir']}")
+    df_log = pd.DataFrame(history)
+    csv_log_path = os.path.join(cfg['save_dir'], 'training_log.csv')
+    df_log.to_csv(csv_log_path, index=False)
+    print(f"\nTraining completed! Best Val Dice: {best_val_dice:.4f}")
+    print(f"Saved training log: {csv_log_path}")
+
+    # 7. Append to Master Runs Registry
+    try:
+        parent_dir = os.path.dirname(os.path.abspath(cfg['save_dir']))
+        master_summary_path = os.path.join(parent_dir, 'all_runs_summary.csv')
+        summary_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'exp_name': cfg.get('exp_name', 'exp'),
+            'epochs': epochs,
+            'batch_size': batch_size,
+            'lr': cfg.get('lr', 1e-3),
+            'best_val_dice': round(float(best_val_dice), 4),
+            'save_dir': cfg['save_dir']
+        }
+        master_df = pd.read_csv(master_summary_path) if os.path.exists(master_summary_path) else pd.DataFrame()
+        master_df = pd.concat([master_df, pd.DataFrame([summary_entry])], ignore_index=True)
+        master_df.to_csv(master_summary_path, index=False)
+        print(f"Updated master runs registry: {master_summary_path}")
+    except Exception as e:
+        print(f"Note: Could not update master runs registry: {e}")
 
 
 if __name__ == '__main__':
