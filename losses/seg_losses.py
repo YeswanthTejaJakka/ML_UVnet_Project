@@ -5,6 +5,25 @@ import torch.nn.functional as F
 from dataset.boundary_utils import compute_scale_weight
 
 
+def safe_binary_cross_entropy(pred, target, reduction='mean'):
+    """
+    Computes binary cross-entropy safely in float32 with autocast disabled.
+    Prevents PyTorch RuntimeError: 'torch.nn.functional.binary_cross_entropy and
+    torch.nn.BCELoss are unsafe to autocast' while maintaining numerical stability.
+    """
+    p = pred.float().clamp(1e-7, 1.0 - 1e-7)
+    t = target.float()
+    
+    device_type = 'cuda' if pred.is_cuda else 'cpu'
+    
+    try:
+        with torch.amp.autocast(device_type, enabled=False):
+            return F.binary_cross_entropy(p, t, reduction=reduction)
+    except Exception:
+        with torch.cuda.amp.autocast(enabled=False):
+            return F.binary_cross_entropy(p, t, reduction=reduction)
+
+
 class DiceLoss(nn.Module):
     def __init__(self, smooth=1e-5):
         super().__init__()
@@ -16,8 +35,8 @@ class DiceLoss(nn.Module):
         target: [B, 1, H, W] in {0, 1}
         """
         batch = pred.size(0)
-        p = pred.view(batch, -1)
-        t = target.view(batch, -1)
+        p = pred.float().view(batch, -1)
+        t = target.float().view(batch, -1)
         intersection = (p * t).sum(dim=1)
         cardinality = p.sum(dim=1) + t.sum(dim=1)
         dice = (2.0 * intersection + self.smooth) / (cardinality + self.smooth)
@@ -30,11 +49,10 @@ class BceDiceLoss(nn.Module):
         super().__init__()
         self.wb = wb
         self.wd = wd
-        self.bce = nn.BCELoss()
         self.dice = DiceLoss()
 
     def forward(self, pred, target):
-        loss_bce = self.bce(pred, target)
+        loss_bce = safe_binary_cross_entropy(pred, target, reduction='mean')
         loss_dice = self.dice(pred, target)
         return self.wb * loss_bce + self.wd * loss_dice
 
@@ -65,10 +83,10 @@ class ScaleAwareBoundaryLoss(nn.Module):
             gamma=self.gamma,
             min_weight=self.min_weight,
             max_weight=self.max_weight
-        ).squeeze(-1).squeeze(-1)  # [B, 1]
+        ).squeeze(-1).squeeze(-1).float()  # [B, 1]
 
-        # Sample-wise BCE for boundary
-        bce_per_sample = F.binary_cross_entropy(pred_boundary, gt_boundary, reduction='none')
+        # Sample-wise BCE for boundary computed safely
+        bce_per_sample = safe_binary_cross_entropy(pred_boundary, gt_boundary, reduction='none')
         bce_sample_mean = bce_per_sample.mean(dim=(-2, -1))  # [B, 1]
         weighted_bce = (bce_sample_mean * scale_weights).mean()
 
@@ -88,9 +106,11 @@ class PerturbationConsistencyLoss(nn.Module):
         self.loss_type = loss_type
 
     def forward(self, pred_corrupt, pred_clean):
+        pc = pred_corrupt.float()
+        pcl = pred_clean.detach().float()
         if self.loss_type == 'mse':
-            return F.mse_loss(pred_corrupt, pred_clean.detach())
+            return F.mse_loss(pc, pcl)
         elif self.loss_type == 'l1':
-            return F.l1_loss(pred_corrupt, pred_clean.detach())
+            return F.l1_loss(pc, pcl)
         else:
-            return F.mse_loss(pred_corrupt, pred_clean.detach())
+            return F.mse_loss(pc, pcl)

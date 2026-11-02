@@ -70,6 +70,20 @@ def load_config(args):
     return cfg
 
 
+def make_autocast(device_type, enabled=True):
+    try:
+        return torch.amp.autocast(device_type=device_type, enabled=enabled)
+    except Exception:
+        return torch.cuda.amp.autocast(enabled=enabled)
+
+
+def make_scaler(device_type, enabled=True):
+    try:
+        return torch.amp.GradScaler(device_type, enabled=enabled)
+    except Exception:
+        return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
 def fast_validate(model, loader, device):
     """
     High-speed GPU-vectorized validation computing Dice and IoU in milliseconds.
@@ -84,7 +98,7 @@ def fast_validate(model, loader, device):
             images = batch['image'].to(device)
             masks = batch['mask'].to(device)
 
-            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+            with make_autocast(device.type, enabled=(device.type == 'cuda')):
                 preds = (model(images, return_boundary=False) > 0.5).float()
 
             intersection = (preds * masks).sum(dim=(-2, -1))
@@ -122,31 +136,34 @@ def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device, scaler=
 
         use_boundary = cfg.get('use_boundary_loss', False)
         
-        with torch.cuda.amp.autocast(enabled=use_amp):
+        # Model forward pass in mixed precision
+        with make_autocast(device.type, enabled=use_amp):
             if use_boundary:
                 pred_mask, pred_boundary = model(images, return_boundary=True)
             else:
                 pred_mask = model(images, return_boundary=False)
 
-            loss_seg = bce_dice(pred_mask, masks)
-            total_loss = loss_seg
+        # Numerically stable loss computation in float32
+        loss_seg = bce_dice(pred_mask, masks)
+        total_loss = loss_seg
 
-            if use_boundary and boundary_loss_fn is not None:
-                lambda_b = cfg.get('lambda_boundary', 1.0)
-                loss_b = boundary_loss_fn(pred_boundary, boundaries, masks)
-                total_loss = total_loss + lambda_b * loss_b
-                b_loss_accum += loss_b.item()
+        if use_boundary and boundary_loss_fn is not None:
+            lambda_b = cfg.get('lambda_boundary', 1.0)
+            loss_b = boundary_loss_fn(pred_boundary, boundaries, masks)
+            total_loss = total_loss + lambda_b * loss_b
+            b_loss_accum += loss_b.item()
 
-            if cfg.get('use_consistency_loss', False) and cons_loss_fn is not None:
-                sigma = cfg.get('speckle_sigma', 0.15)
-                gamma = cfg.get('contrast_factor', 0.75)
-                corrupt_images = apply_ultrasound_corruption(images, speckle_sigma=sigma, contrast_factor=gamma)
+        if cfg.get('use_consistency_loss', False) and cons_loss_fn is not None:
+            sigma = cfg.get('speckle_sigma', 0.15)
+            gamma = cfg.get('contrast_factor', 0.75)
+            corrupt_images = apply_ultrasound_corruption(images, speckle_sigma=sigma, contrast_factor=gamma)
+            with make_autocast(device.type, enabled=use_amp):
                 pred_corrupt = model(corrupt_images, return_boundary=False)
 
-                lambda_c = cfg.get('lambda_consistency', 1.0)
-                loss_c = cons_loss_fn(pred_corrupt, pred_mask)
-                total_loss = total_loss + lambda_c * loss_c
-                c_loss_accum += loss_c.item()
+            lambda_c = cfg.get('lambda_consistency', 1.0)
+            loss_c = cons_loss_fn(pred_corrupt, pred_mask)
+            total_loss = total_loss + lambda_c * loss_c
+            c_loss_accum += loss_c.item()
 
         seg_loss_accum += loss_seg.item()
 
@@ -238,7 +255,7 @@ def main():
         loss_modules['consistency'] = PerturbationConsistencyLoss(loss_type='mse')
 
     # 5. Mixed Precision Scaler & Training Loop
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == 'cuda'))
+    scaler = make_scaler(device.type, enabled=(device.type == 'cuda'))
     best_val_dice = 0.0
     history = []
 
