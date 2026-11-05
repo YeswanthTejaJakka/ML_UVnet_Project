@@ -1,0 +1,248 @@
+# TASK: Raise the accuracy of UltraLight VM-UNet on TN3K, fix the evaluation and plots, and make the E1–E4 comparison trustworthy
+
+Repo: `ML_UVnet_Project` (already open in the workspace). Runs on Google Colab (T4/L4), data at `/content/tn3k`, checkpoints on Drive. Read this whole prompt before changing any file. Work through the packages in the order given (P0 → P8). After each package, run its acceptance checks and commit with a clear message. Do not skip a package because it looks small.
+
+---
+
+## 1. Evidence from the last full run (this is what you are fixing)
+
+All numbers below come from the executed notebook (50 epochs, batch 16, fold 0, seed 42, held-out test set of 614 images).
+
+| Model | Test Dice | IoU | Precision | Recall | Small / Med / Large Dice | Boundary IoU (d=2) | HD95 px |
+|---|---|---|---|---|---|---|---|
+| E1 Baseline | 0.5784 | 0.4406 | 0.620 | 0.692 | 0.382 / 0.600 / 0.659 | 0.032 | 35.3 |
+| E2 Boundary | 0.6712 | 0.5453 | 0.693 | 0.752 | 0.470 / 0.694 / 0.753 | 0.050 | 26.0 |
+| E3 Consistency | 0.6851 | 0.5570 | 0.707 | 0.765 | 0.494 / 0.701 / 0.768 | 0.051 | 25.3 |
+| E4 Combined | 0.6671 | 0.5415 | 0.691 | 0.748 | 0.463 / 0.686 / 0.754 | 0.051 | 27.1 |
+
+Speckle robustness (Dice at σ = 0 → 0.25): E1 0.578 → 0.498, E2 0.671 → 0.551, E3 0.685 → 0.652, E4 0.667 → 0.649.
+
+Observed problems, each with the evidence that points to it:
+
+1. **The model is under-trained, not over-fitted.** Final train seg-loss (BCE+Dice) is ≈0.50, which corresponds to a train Dice of only ≈0.65, the same as val Dice (≈0.68). Val Dice is still creeping up at epoch 50, and the cosine schedule hits `min_lr` exactly at epoch 50 because `T_max=epochs`. The configs say 150 epochs, but the notebook overrides them with `--epochs 50`. The official UltraLight VM-UNet recipe trains for far longer (verify the exact numbers in `wurenkai/UltraLight-VM-UNet`).
+2. **The E1 vs E2/E3/E4 comparison is not controlled.** E1 is missing from the training-curve figure (its `training_log.csv` does not exist, so it was trained by an older version of `train.py` with an unknown protocol). The jump of +0.09 to +0.11 Dice from E1 to E2/E3/E4 is not explained by the methods: E3's consistency term has magnitude ≈0.003 against a seg loss of ≈0.5 (negligible gradient), and E2's boundary head is a single 1×1 conv with 9 parameters. E2, E3, E4 differ from each other by less than 0.02 Dice with one seed and one fold, which is within run-to-run noise (val Dice fluctuates ±0.01 between consecutive epochs). Conclusion: the current ranking cannot be trusted.
+3. **About 1,000 of 2,879 trainval images are unused.** The log says `Train samples: 1503 | Val samples: 376` (= 1,879) while `trainval-image` has 2,879 files. `TN3KDataset._load_split_samples` silently skips any fold-JSON entry for which it cannot find both files (`if img_path and mask_path`). Either the fold JSON really lists only 1,879 images, or file matching is failing. This must be resolved first.
+4. **The boundary supervision does not learn and dominates the loss.** In E4 the boundary term goes 1.89 → 1.02 (barely moves, so the boundary head predicts almost nothing useful) yet it is about two thirds of the total loss. It is a 1×1 conv on the same 8-channel final feature map, so it has almost no influence on the shared features. The scale weight `clip(1/(rel_area+1e-4)^0.5, 1, 5)` saturates at 5 for every lesion under ~4% of the image and sits between 1.8 and 5 for nearly all samples, so it hardly discriminates between sizes. E4 ends up *worse* than E3 on clean Dice, so the "proposed" method is not the best one.
+5. **Consistency loss is numerically irrelevant.** MSE on probabilities with λ=1 gives ≈0.003. Its real effect in E3 is probably only an extra noisy forward pass. The robustness gain of E3 over E2 at σ=0.25 (0.652 vs 0.551) is real, but the loss is too weak to be the clean explanation, and there is no ramp-up or per-sample variation of the corruption.
+6. **Failure mode is false-positive regions and merged nodules, not only boundaries.** Precision (0.69–0.71) is lower than recall (0.75–0.77). In the 8-case qualitative figure, E2–E4 produce large merged blobs when several nodules are present, extra spurious blobs, and under-segment large nodules. Pushing recall further (e.g. a recall-heavy Tversky loss) would make this worse. The model needs better global context/regularisation and cleaner training, not just sharper edges.
+7. **Evaluation code has defects that make boundary metrics meaningless.**
+   - `calculate_boundary_iou` uses `d0=2` px on 256×256 images. Cheng et al. use d ≈ 2% of the image diagonal (≈7 px at 256). With d=2 every model scores 0.03–0.05 and E2/E3/E4 are indistinguishable (0.0503 / 0.0512 / 0.0511).
+   - `calculate_hd95` takes distances from **all pixels** of each mask (`dt_t[p]`, `dt_p[t]`) instead of **surface** pixels, so interior pixels contribute zeros and HD95 is under-estimated for large masks.
+   - Metrics are computed on the 256×256 resized masks only.
+   - Robustness covers only multiplicative speckle; the project spec also requires contrast changes.
+   - `measure_model_efficiency` reports thop FLOPs, which do not count the SSM scan/einsum ops, and latency of the pure-PyTorch scan fallback (≈51–59 ms), not of the official Mamba CUDA kernel. These facts are not labelled in the report.
+8. **Training curves are incomplete and not comparable.** `generate_deliverables.py` plots only `train_loss` and `val_dice`. E1 is missing. E3's "total loss" (no boundary term) is plotted on the same axis as E2/E4's total loss (which includes the boundary term of ≈1.0), so the curves cannot be compared. Train Dice/IoU, val loss, precision/recall, boundary loss, consistency loss, per-size Dice and LR are not logged or plotted, so over/under-fitting cannot be diagnosed.
+9. **The qualitative figure is weak.** Eight cases are chosen by `np.linspace(0, N-1, 8)` over sorted filenames, shown as raw binary masks with no overlay, no per-case metric, and no selection logic. Several rows are failure cases with nothing explaining why. One ground-truth mask (a straight-edged block touching the left border) looks suspicious and must be checked for image/mask alignment.
+10. **Numerical risks in the Mamba fallback.** Training runs under fp16 autocast. Inside `PyTorchMamba.forward`, `dA` is fp32 (exp autocasts to fp32) but `Bx` is fp16, and `PScan` does in-place `add_/mul_` across up to 1,024 tokens in mixed dtypes, which risks precision loss in the recurrent state. The model also outputs `sigmoid` probabilities in fp16 and then clamps for BCE, which saturates gradients. The custom `PScan.backward` has never been verified against a reference.
+11. **Training is slow** (≈50 min per 50-epoch run, estimated from the checkpoint-backup timestamps), mainly because of per-step PIL decoding/resizing with 2 workers, `cudnn.deterministic=True`, and four sequential Mamba calls per PVM layer. This blocks the multi-seed runs needed for credible results.
+
+---
+
+## 2. Hard constraints (never violate)
+
+- **Inference architecture of E1–E4 stays UltraLight VM-UNet** (`c_list=[8,16,24,32,48,64]`, 0.0495M params). Every extra head or loss is training-only and must be dropped at inference, per the project spec. Any change that alters inference (wider channels, higher resolution, TTA, post-processing) goes into **separate, clearly labelled rows/tracks** and never replaces E1–E4.
+- **No test-set information is used for any decision** (hyper-parameters, threshold, epoch selection, post-processing, image selection for "good" examples). Choose everything on the validation split of the official fold. The test set is used once per final configuration.
+- Use the **official fold JSON**. If `tn3k-trainval-fold{k}.json` is missing, **fail loudly** instead of silently falling back to a random split.
+- Keep the 8 existing deliverable file names working (see §8) and keep the Colab notebook flow. You may add files and cells.
+- Every experiment E1–E4 must use **identical** data pipeline, optimiser, schedule, epochs, EMA, and deep-supervision settings. Only the loss component under test may differ. Speckle/noise/contrast-attenuation must **not** appear in the shared augmentation (only brightness/gamma jitter of at most ±10–15%), otherwise E3's claim cannot be tested.
+- Do not claim an improvement that was not measured. Report whatever the runs show, including negative results.
+
+---
+
+## 3. Work packages
+
+### P0 — Data integrity audit and fix (do this first; everything else depends on it)
+
+1. Add `tools/audit_dataset.py` that, for the given `--data_root` and fold, prints and saves `audit/audit_report.md`:
+   - number of files in `trainval-image`, `trainval-mask`, `test-image`, `test-mask`; number of entries in the fold JSON `train` and `val` lists; number of entries successfully matched; **the list of unmatched entries** and the reason;
+   - verification that train ∩ val = ∅, and that no filename **or file hash (md5)** of a trainval image appears in the test set;
+   - image size distribution (min/median/max H×W, aspect ratios), mask value set (should be {0,255} or {0,1}), count of empty masks, count of image/mask shape mismatches;
+   - lesion-size category counts (small <2%, medium 2–10%, large ≥10% of image area) on train/val/test;
+   - 12 random image+mask overlays saved to `audit/overlays/` to verify image–mask alignment, including the test case whose GT is a straight-edged block at the left border.
+2. Fix `TN3KDataset`: when an entry cannot be matched, **raise or log a counted warning** (never silent). Make matching robust (zero-padded ids, with/without extension, case). If the official fold JSON legitimately contains only 1,879 images, document that in the audit report and decide with evidence whether to use all 2,879 trainval images (e.g. train on fold-train, validate on fold-val, and use the remaining images as extra training data **only if** they cannot overlap with val/test by hash) or to stay with the official fold; justify the choice in `audit_report.md`. If matching was the bug, fix it so that train+val = 2,879 for the 5-fold protocol.
+3. Add an explicit `assert` that the fold JSON exists when `split in {train, val}`.
+
+**Acceptance:** audit report exists; train+val count is explained (matches 2,879 or the reason is documented with evidence); zero silent drops; overlays confirm alignment.
+
+### P1 — Numerical correctness of the model (no accuracy change intended, removes hidden damage)
+
+1. Write `tests/test_pscan.py`: compare `PScan` forward and `torch.autograd.gradcheck` (float64, tiny shapes, including non-power-of-two L such as 24 and 1000) against a simple sequential reference scan `h_t = dA_t * h_{t-1} + Bx_t`. Fix `PScan` if it fails.
+2. Make the SSM math **always fp32**: inside `PyTorchMamba.forward`, cast `dt, B_ssm, C_ssm, x_act` to float32 and run the scan under `torch.autocast(..., enabled=False)`, then cast back.
+3. Change the model to **return logits** (keep a flag `return_logits=True`) and use `F.binary_cross_entropy_with_logits`; apply `sigmoid` only for metrics/inference. Update every call site (`train.py`, `evaluate.py`, `generate_deliverables.py`, losses). Dice loss uses `sigmoid(logits)`.
+4. In `PVMLayer`, batch the four channel chunks into one Mamba call (`torch.cat` along the batch dimension → one forward → split). This is mathematically identical because the Mamba weights are shared, and removes 3 of 4 sequential scans. Add a test that the output matches the old four-call implementation to 1e-5.
+5. Run a quick A/B (same seed, 30 epochs, val only): AMP on vs AMP off (with fp32 scan). Default `amp: false` unless AMP gives equal val Dice and a real speedup.
+
+**Acceptance:** gradcheck passes; old vs batched PVM output matches; `Params` still 0.0495M for E1 and unchanged inference graph for all experiments.
+
+### P2 — Speed (needed to afford multiple seeds)
+
+1. Add an in-RAM cache: decode and resize every image/mask **once** to uint8 tensors (256×256, or the configured `img_size`) and keep them in memory; apply augmentation on GPU (batched `affine_grid`/`grid_sample` for rotation/scale/translate with the same grid for image and mask, `nearest` for mask) or with a very light CPU path. Use `num_workers` that matches the machine (`os.cpu_count()`), `persistent_workers=True`, `pin_memory=True`.
+2. Set `cudnn.deterministic=False`, `cudnn.benchmark=True` (still seed everything; document that runs are seed-reproducible in distribution, not bitwise).
+3. Print a one-time profile at start of training: seconds/epoch split into data time, forward/backward time, validation time. **Target ≤ 20 s/epoch for E1 on T4/L4**; if not met, report the bottleneck and what you did.
+
+### P3 — Shared training recipe (applies identically to E1–E4)
+
+Implement all of the following as config keys with these defaults in a new `configs/base.yaml` that `e1…e4` inherit (so there is one source of truth; `e*.yaml` only add their loss flags):
+
+```yaml
+epochs: 200
+batch_size: 8
+lr: 0.001
+warmup_epochs: 5          # linear warm-up, then cosine to min_lr over the remaining epochs
+min_lr: 1.0e-6
+weight_decay: 0.01        # applied ONLY to tensors with ndim >= 2; none on bias, norm, A_log, D, skip_scale
+grad_clip: 1.0
+ema_decay: 0.999          # evaluate/select/save the EMA weights; keep raw weights too
+amp: false
+deep_supervision: true    # training-only 1x1 heads on decoder stages out5,out4,out3,out2; weights [0.4,0.3,0.2,0.1]; dropped at inference
+aug:
+  hflip: 0.5
+  vflip: 0.0              # REMOVE vertical flip: skin/probe is always at the top in thyroid ultrasound
+  rotate_deg: 15
+  scale: [0.8, 1.2]       # NEW random zoom
+  translate: 0.10         # NEW
+  brightness: 0.10
+  gamma: [0.9, 1.1]
+  # no speckle / noise / contrast attenuation here (reserved for E3/E4)
+```
+
+Notes:
+- `T_max` must equal `epochs - warmup_epochs`; the notebook must **stop overriding** epochs/batch size (remove `--epochs 50 --batch_size 16`). The config is the single source of truth; CLI flags only for explicit overrides.
+- Add `--seed`, `--resume` (continue from `latest_model.pth`, including optimiser, scheduler, EMA, epoch, history). Colab sessions drop; training must be resumable.
+- Save checkpoints under `…/{exp_name}/seed{seed}/`.
+- Deep-supervision heads add parameters only during training; assert that the inference `state_dict` (after dropping `aux_*` keys) is identical in shape to the original, and that `sum(p.numel())` of the inference model is 49.5K.
+- Per-epoch logging (extend `training_log.csv`): `epoch, lr, epoch_time, train_total, train_seg, train_aux, train_boundary, train_consistency, train_dice, train_iou, val_loss, val_dice, val_iou, val_precision, val_recall, val_dice_small, val_dice_medium, val_dice_large`, all computed **per image then averaged over the whole val set** (not mean of batch means). Every 10 epochs and at the end also log `val_biou_d7` and `val_hd95`.
+- Model selection: best EMA val Dice. Also save `last_ema.pth`.
+
+### P4 — Loss redesign for the research components
+
+**E2 — lesion-scale-aware boundary supervision (training-only, no extra inference cost)**
+
+- New default `boundary_mode: from_mask`: derive the predicted boundary directly from the **main mask probability** with a differentiable morphological gradient (`dil = maxpool(p, k)`, `ero = -maxpool(-p, k)`, `b = dil - ero`, `k = 2r+1`), and compare it to the GT band with `r = 2` (5×5 kernel at 256 px). Loss = `Dice(b, gt_band) + BCE(b, gt_band)` with per-sample scale weights. This supervises the final contour directly and needs no extra branch. Keep the old auxiliary-head variant available as `boundary_mode: head` for the ablation, but make the head a 3×3 conv on the full-resolution decoder feature (training-only) rather than the current 1×1.
+- New scale weight: `w_i = clip((A_ref / (area_i + eps))^γ, 1, w_max)` with `A_ref = 0.05`, `γ = 0.5`, `w_max = 4`, then **normalise to batch-mean 1** so the gradient scale does not change. Small lesions get the larger weight; lesions above 5% area get weight 1.
+- `lambda_boundary` with a linear warm-up from 0 over the first 20% of epochs. Tune `λ ∈ {0.1, 0.3, 0.5}` on validation (single seed, 100 epochs). Log `λ·L_boundary / L_seg` and keep it ≤ 0.5 after warm-up.
+- Add a switch `scale_aware_seg: true/false` that applies the same `w_i` to the per-sample BCE+Dice seg loss. Run it as an extra ablation (E2b); keep it only if it improves val small-lesion Dice without lowering overall val Dice.
+- Do **not** add a recall-biased Tversky/focal loss to the main recipe (precision is already lower than it should be).
+
+**E3 — corruption-aware consistency**
+
+- Per-sample random corruption each step: `σ ~ U(0.05, 0.30)` multiplicative speckle (existing formula `I + I·η`), contrast factor `~ U(0.5, 1.0)`, optional Gaussian blur σ_blur `~ U(0, 1.0)` px.
+- Consistency loss on the **soft masks**: `L_c = (1 − SoftDice(p_corrupt, stopgrad(p_clean))) + MSE(p_corrupt, stopgrad(p_clean))`. Soft-Dice is scale-invariant, so small lesions are not ignored (plain MSE on probabilities is dominated by background and was ≈0.003).
+- `lambda_consistency` ramps up linearly from 0 over the first 20% of epochs. Tune `λ ∈ {0.5, 1, 2}` on validation. Log `λ·L_c / L_seg` and require it to be in 0.05–0.5 after warm-up (otherwise λ is too small to matter).
+- Optional extra ablation E3+: also apply the supervised BCE+Dice loss (weight 0.5) on the corrupted view. Report it as a separate row. The main E3 stays "consistency only".
+
+**E4 — combined**: E2-best and E3-best loss settings together, each at its own validation-tuned λ. If E4 does not beat max(E2, E3) on validation, still report it honestly and add one more tuning round of λ for the combination (small grid, validation only).
+
+**Baselines to report side by side**
+- **E1-orig**: faithful reproduction of the official UltraLight VM-UNet recipe (check the official repo for batch size, LR schedule, epochs, augmentation) with BCE+Dice and nothing else.
+- **E1-R\***: baseline using the shared recipe from P3 (this is the fair reference for E2–E4).
+- E2, E3, E4 all use the shared recipe. Gains are always computed against **E1-R\***, and E1-orig is shown as the reference.
+
+### P5 — Experiment protocol
+
+1. **Stage A — recipe ladder** (validation only, seed 42, 100 epochs, E1 loss only). Run and record val Dice/IoU for:
+   R0 = current recipe re-run with the *current code* (this is the first honest E1 number) → R1 = + P0 data fix, no vflip, new geometric aug → R2 = + P1 logits & fp32 scan → R3 = + 200 epochs, warm-up, EMA, no-decay groups, grad-clip, bs 8 → R4 = + deep supervision.
+   Keep a step only if it does not hurt val Dice (tolerance 0.005); write the ladder table to `reports/recipe_ladder.csv`.
+2. **Stage B — loss tuning** (validation only, seed 42, 100 epochs): the λ grids in P4.
+3. **Stage C — final runs**: E1-orig, E1-R\*, E2, E3, E4 (+ E2b, E3+ if time permits) at 200 epochs with **3 seeds (42, 43, 44)** on fold 0. If the measured epoch time makes this exceed the Colab budget, run 2 seeds or 150 epochs, and say so explicitly in the report.
+4. Report **mean ± std over seeds** for every metric. For the test set also report a **paired bootstrap 95% CI** (10,000 resamples over test images) for the difference of E2/E3/E4 vs E1-R\*, and a Wilcoxon signed-rank p-value on per-image Dice. Only describe a difference as an improvement if the CI excludes 0.
+5. Optional (only if time remains): run folds 1–4 for E1-R\* and the best variant to show the effect is not specific to fold 0.
+
+### P6 — Evaluation and metric fixes
+
+Edit `utils/metrics.py` and make `evaluate.py` and `generate_deliverables.py` use the **same** functions (remove duplicated logic).
+
+1. **Boundary IoU**: use Cheng et al. definition with `d = round(0.02 × image diagonal)` (≈7 px at 256 px) as the headline value; also report d = 2 and d = 4. Add a **Boundary F1** with 2-px tolerance.
+2. **HD95**: compute on **surface pixels** (mask minus its erosion) with symmetric distances, per image; empty prediction → penalty equal to the image diagonal (362 px at 256) and report the **number of empty predictions** separately. Document the convention in the CSV header/README.
+3. Add unit tests (`tests/test_metrics.py`): identical masks → Dice=1, BIoU=1, HD95=0; a disc shifted by k px → HD95 ≈ k; empty vs non-empty → penalty path; BIoU monotonically decreases with shift.
+4. **Resolution**: add `--eval_original_res`: upsample the probability map bilinearly to the original image size, threshold at 0.5, compare against the original-resolution mask. Report both the 256×256 and original-resolution Dice/IoU in `final_test_comparison.csv` (extra columns, existing columns unchanged).
+5. **Lesion-level detection** (important for the small-lesion claim): per lesion size, report recall of detection (a GT lesion counts as detected if some predicted component overlaps it with IoU ≥ 0.5), number of empty predictions, number of predicted components with no GT overlap (false-positive blobs per image).
+6. **Robustness**: add (a) the existing speckle σ sweep, (b) a **contrast sweep** (factor 1.0, 0.9, 0.8, 0.7, 0.6, 0.5), (c) a combined σ=0.15 + factor 0.75 condition, and (d) Gaussian noise (additive, σ 0.02–0.10). Report absolute Dice and **retention = Dice_corrupt / Dice_clean**. Use a fixed seed for the corruptions so all models see identical corrupted inputs.
+7. **Efficiency table**: label FLOPs as "thop (conv/linear only; SSM scan not counted)"; label latency as "PyTorch parallel-scan fallback, batch 1, CUDA-synchronised, median of 200 runs after 50 warm-up runs"; also report CPU latency; if `mamba_ssm` is importable report its latency too (do not try to compile it if it hangs; skip). Parameters must be shown for the **inference** model (without training-only heads) for every row.
+8. Threshold: pick the probability threshold on the **validation** set from `{0.35 … 0.65}`; report test results at 0.5 (headline) and at the val-chosen threshold (extra column).
+
+### P7 — Training-curve figure (user-visible deliverable: must be complete)
+
+Regenerate `training_curves_E1_E4.png` (same file name) from the new `training_log.csv` files. It must include **E1-R\*** (and E1-orig as a dashed grey line). One figure, 3 rows × 4 columns, consistent colours per experiment, one shared legend, grid, axis labels with units, best epoch marked with a star, shaded **mean ± std over seeds**, optional 5-epoch smoothing drawn lightly over the raw curve:
+
+| | col 1 | col 2 | col 3 | col 4 |
+|---|---|---|---|---|
+| row 1 | Total train loss | **Seg-only train loss (comparable across all experiments)** | Boundary loss (E2, E4) | Consistency loss (E3, E4), log-y |
+| row 2 | Train Dice | Val Dice | Val IoU | Train−Val Dice gap |
+| row 3 | Val Precision | Val Recall | Val Dice by lesion size (small/medium/large, one line style per size, colour per experiment) | LR schedule + EMA decay note |
+
+Also export every panel as its own PNG in `final_deliverables/curves/` and write `final_deliverables/training_summary.csv` (best epoch, best val Dice/IoU, final train loss, final train−val gap, epoch time, per experiment, mean ± std). Missing logs must produce a clear warning, never a silently shorter figure.
+
+### P8 — Qualitative figure (user-visible deliverable: must be informative)
+
+Keep `qualitative_comparison_8_cases.png` (same name, 8 representative cases) and add three more figures. Selection must be **rule-based and deterministic**, never hand-picked, and the rule is printed in the figure caption and in `qualitative_cases.csv`:
+
+1. `qualitative_comparison_8_cases.png`: fixed-seed stratified sample: 3 small, 3 medium, 2 large test cases.
+2. `qualitative_best_gains.png`: the 6 test cases with the largest Dice gain of the final E4 (or best variant) over E1-R\*.
+3. `qualitative_failures.png`: the 6 cases with the lowest Dice for the best variant (so the report can discuss failure modes honestly).
+4. `qualitative_robustness.png`: 4 cases rendered at clean, σ=0.15 and σ=0.25 speckle for E1-R\* vs the best variant.
+
+Panel design (every figure): columns = *Image | Ground truth overlay | E1-R\* | E2 | E3 | E4* (best seed or seed-ensemble median, state which). Each model panel shows the **image with GT contour in green and prediction contour in red**, plus a small **error map** strip (TP green, FP red, FN blue), with `Dice / BIoU(d7) / HD95` written on the panel. Show images at their original aspect ratio (no squashing for display), use a consistent colour legend, ≥200 dpi. Write all per-case numbers to `qualitative_cases.csv`.
+
+Also write `final_deliverables/failure_analysis.md` generated automatically from the lesion-level statistics of P6.5: counts of missed lesions, spurious blobs per image, merged multi-nodule predictions (one predicted component overlapping ≥2 GT lesions), under-segmented large nodules (Dice < 0.5 with recall < 0.5), per lesion-size category.
+
+### P9 — Optional, clearly separate tracks (do these only after Stage C is finished; never replace E1–E4)
+
+- **Track B1 — resolution:** same architecture at `img_size` 320 and 384 (E1-R\* and best variant). Report params (unchanged), FLOPs and latency.
+- **Track B2 — width:** `c_list = [16, 32, 48, 64, 96, 128]` (≈0.15–0.2M params) with the best recipe; report params/FLOPs/latency and label it "not UltraLight-sized".
+- **Track B3 — inference-only additions** (each reported as a separate row with its latency cost): horizontal-flip TTA; removal of connected components smaller than `min_area` (chosen on validation) and hole filling. Do **not** keep only the largest component, because TN3K contains multi-nodule images.
+- **Track B4 — 5-fold cross validation** of E1-R\* and the best variant.
+
+### P10 — Notebook and orchestration
+
+Update `colab_runner.ipynb` (and the same notebook uploaded to the repo root):
+- Remove the stale markdown such as "completed training of 50 epochs and saved" and the hard-coded `--epochs 50 --batch_size 16`.
+- Add a cell for `tools/audit_dataset.py`, a cell that runs Stage A, B, C through one driver script `run_all.py --stage {A,B,C} --seeds 42 43 44` with `--resume`, and cells that display every new deliverable.
+- Skip logic must be per `(experiment, seed)` and must not silently reuse a checkpoint created by an older code version: store a `code_version` (git commit hash) and the full resolved config inside each checkpoint and refuse to skip when they differ (print a clear message).
+- Keep Drive paths; write a final `reports/EXPERIMENT_REPORT.md` as described in §6.
+
+---
+
+## 4. Verification you must run (and paste the results into the report)
+
+1. `pytest tests/` passes (pscan gradcheck, PVM equivalence, metrics sanity, dataset matching, EMA/checkpoint round-trip, inference-model param count = 0.0495M).
+2. A 2-epoch smoke run of each of E1–E4 finishes, writes complete logs, and the plotting script produces the full 12-panel figure and the four qualitative figures from those logs.
+3. Check that the logged `λ·L_boundary/L_seg` and `λ·L_c/L_seg` ratios are inside the ranges specified in P4.
+4. Confirm that no code path reads the test set before the final evaluation (grep for `split='test'` usage; add an assertion in `train.py`).
+
+---
+
+## 5. Success criteria
+
+These are targets to aim for, not guarantees. Report what is measured.
+
+- E1-R\* test Dice clearly above the old E1 (0.578) and at least at the level of the old E3 (≈0.685); the best variant should reach roughly 0.70–0.75 test Dice. A 49K-parameter model has a ceiling, so if the numbers plateau below that, say so and show the evidence (train/val gap, ladder table).
+- E4 ≥ max(E2, E3) on validation after tuning, **or** an honest explanation with ablation numbers.
+- Small-lesion Dice and small-lesion detection recall higher than E1-R\* with a bootstrap CI that excludes 0, or an honest statement that it did not.
+- Speckle/contrast retention of E3/E4 better than E1-R\* and E2.
+- Boundary IoU (d≈7) and HD95 (surface-based) now separate the models instead of showing identical values.
+- Zero silently skipped data; all deliverables regenerated; E1 present in every figure.
+
+---
+
+## 6. Final report you must write: `reports/EXPERIMENT_REPORT.md`
+
+1. What was wrong (map each item of §1 to "confirmed / not confirmed" with the evidence you found, e.g. the audit result for the 1,879 vs 2,879 question, the pscan test result, the AMP A/B result).
+2. What was changed (one line per package, with file names and commit hashes).
+3. Recipe ladder table (Stage A) and λ tuning tables (Stage B).
+4. Final table: every experiment × every metric, mean ± std over seeds, with bootstrap CIs and p-values vs E1-R\*; E1-orig shown for reference.
+5. Lesion-size, boundary (d=2, 4, 7, BF1, HD95), detection, robustness (speckle, contrast, combined, Gaussian) and efficiency tables.
+6. The figures (curves, qualitative ×4) and a short written interpretation of failure modes.
+7. A "Limitations" section: single fold unless Track B4 was run, latency measured with the PyTorch scan fallback, FLOPs undercount SSM ops, any deviations from the planned seeds/epochs because of Colab time.
+
+---
+
+## 7. Things NOT to do
+
+- Do not change the E1–E4 inference network, resolution, or channel widths in the main experiments.
+- Do not tune anything on the test set, including the threshold, post-processing and which cases to show.
+- Do not delete old checkpoints or logs; move them to `legacy/` and keep them for the report's "before" numbers.
+- Do not add speckle/contrast-attenuation to the shared augmentation.
+- Do not report a method as better because a single seed or a single epoch looks higher.
+- Do not silently catch exceptions in data loading, checkpoint loading or plotting; fail with an explicit message.
+- Do not leave debugging prints or half-finished flags in the notebook.
