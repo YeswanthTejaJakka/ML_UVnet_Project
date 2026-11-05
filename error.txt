@@ -1,44 +1,39 @@
-/content/ML_UVnet
-=== Starting Experiment: e1_baseline on cuda ===
-Dataset root: /content/tn3k | Fold: 0
-Train samples: 1503 | Val samples: 376
-Model initialized: 0.0495M parameters
-/content/ML_UVnet/train.py:241: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
-  scaler = torch.cuda.amp.GradScaler(enabled=(device.type == 'cuda'))
-/content/ML_UVnet/train.py:125: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
-  with torch.cuda.amp.autocast(enabled=use_amp):
+ /content/ML_UVnet
+# TN3K Dataset Audit Report
+data_root: /content/tn3k  |  fold: 0
+
+## 1. File Counts
+  trainval-image: 2879 files  (exists=True)
+  trainval-mask: 2879 files  (exists=True)
+  test-image: 614 files  (exists=True)
+  test-mask: 614 files  (exists=True)
+
+## 2. Fold JSON Analysis
+  Fold JSON: /content/tn3k/tn3k-trainval-fold0.json
+  Entries — train: 2303, val: 576, total: 2879
+
+## 3. File Matching
 Traceback (most recent call last):
-  File "/content/ML_UVnet/train.py", line 300, in <module>
+  File "/content/ML_UVnet/tools/audit_dataset.py", line 393, in <module>
     main()
     ~~~~^^
-  File "/content/ML_UVnet/train.py", line 246, in main
-    train_res = train_one_epoch(model, train_loader, optimizer, loss_modules, cfg, device, scaler=scaler)
-  File "/content/ML_UVnet/train.py", line 131, in train_one_epoch
-    loss_seg = bce_dice(pred_mask, masks)
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/content/ML_UVnet/losses/seg_losses.py", line 37, in forward
-    loss_bce = self.bce(pred, target)
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/loss.py", line 710, in forward
-    return F.binary_cross_entropy(
-           ~~~~~~~~~~~~~~~~~~~~~~^
-        input, target, weight=self.weight, reduction=self.reduction
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/usr/local/lib/python3.13/dist-packages/torch/nn/functional.py", line 3574, in binary_cross_entropy
-    return torch._C._nn.binary_cross_entropy(input, target, weight, reduction_enum)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-RuntimeError: torch.nn.functional.binary_cross_entropy and torch.nn.BCELoss are unsafe to autocast.
-Many models use a sigmoid layer right before the binary cross entropy layer.
-In this case, combine the two layers using torch.nn.functional.binary_cross_entropy_with_logits
-or torch.nn.BCEWithLogitsLoss.  binary_cross_entropy_with_logits and BCEWithLogits are
-safe to autocast.
+  File "/content/ML_UVnet/tools/audit_dataset.py", line 389, in main
+    audit(args.data_root, args.fold, args.out_dir)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/content/ML_UVnet/tools/audit_dataset.py", line 186, in audit
+    img_p,  ir = find_file_robust(img_dir,  name)
+                 ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/content/ML_UVnet/tools/audit_dataset.py", line 47, in find_file_robust
+    stem = os.path.splitext(name)[0]
+           ~~~~~~~~~~~~~~~~^^^^^^
+  File "<frozen posixpath>", line 118, in splitext
+TypeError: expected str, bytes or os.PathLike object, not int
+---------------------------------------------------------------------------
+FileNotFoundError                         Traceback (most recent call last)
+/tmp/ipykernel_750/432141343.py in <cell line: 0>()
+      2 get_ipython().system('python tools/audit_dataset.py --data_root /content/tn3k --fold 0 --out_dir audit')
+      3 
+----> 4 with open('audit/audit_report.md', 'r') as f:
+      5     print(f.read())
+
+FileNotFoundError: [Errno 2] No such file or directory: 'audit/audit_report.md'
