@@ -53,6 +53,13 @@ from utils import MetricTracker, calculate_dice, calculate_iou
 # Utilities
 # ──────────────────────────────────────────────────────────────────────────────
 
+def safe_torch_load(path, map_location=None):
+    try:
+        return torch.load(path, map_location=map_location, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=map_location)
+
+
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
@@ -429,7 +436,7 @@ def save_checkpoint(path, model, ema, optimizer, scheduler, epoch, best_val_dice
 
 
 def load_checkpoint(path, model, ema, optimizer, scheduler, device, cfg, code_version):
-    ckpt = torch.load(path, map_location=device)
+    ckpt = safe_torch_load(path, map_location=device)
     # Version check
     ckpt_ver = ckpt.get('code_version', 'unknown')
     if ckpt_ver != code_version and code_version != 'unknown':
@@ -495,7 +502,7 @@ def main():
     # Check for existing checkpoint — refuse to skip if code version differs
     if os.path.exists(best_model_path) and not cfg.get('resume', False) and not args.force_retrain:
         try:
-            prev = torch.load(best_model_path, map_location='cpu')
+            prev = safe_torch_load(best_model_path, map_location='cpu')
             prev_ver = prev.get('code_version', 'unknown')
             if prev_ver == code_version or code_version == 'unknown':
                 prev_dice = prev.get('val_dice', prev.get('best_val_dice', 'N/A'))

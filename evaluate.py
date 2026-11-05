@@ -63,9 +63,16 @@ def parse_args():
     return parser.parse_args()
 
 
+def safe_torch_load(path, map_location=None):
+    try:
+        return torch.load(path, map_location=map_location, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=map_location)
+
+
 def load_model(weights_path, device):
     """Loads model weights, stripping any training-only heads for inference."""
-    checkpoint = torch.load(weights_path, map_location=device)
+    checkpoint = safe_torch_load(weights_path, map_location=device)
     if 'ema_shadow' in checkpoint and checkpoint['ema_shadow'] is not None:
         state_dict = checkpoint['ema_shadow']
         print("  Using EMA weights from checkpoint.")

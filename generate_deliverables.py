@@ -79,10 +79,17 @@ def find_checkpoint(checkpoints_root, exp_name, seed=42):
     return None
 
 
+def safe_torch_load(path, map_location=None):
+    try:
+        return torch.load(path, map_location=map_location, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=map_location)
+
+
 def load_model_from_checkpoint(checkpoint_path, device):
     if not checkpoint_path or not os.path.exists(checkpoint_path):
         return None
-    ckpt = torch.load(checkpoint_path, map_location=device)
+    ckpt = safe_torch_load(checkpoint_path, map_location=device)
     if 'ema_shadow' in ckpt and ckpt['ema_shadow'] is not None:
         state_dict = ckpt['ema_shadow']
     elif 'model_state_dict' in ckpt:
