@@ -1,0 +1,59 @@
+# base.yaml — Single source of truth for all E1–E4 experiments.
+# Experiment-specific configs inherit these defaults.
+
+# ── Data ─────────────────────────────────────────────────────────────────────
+data_root: "/content/tn3k"
+img_size: [256, 256]
+fold: 0
+
+# ── Training ─────────────────────────────────────────────────────────────────
+epochs: 200
+batch_size: 8
+lr: 0.001
+warmup_epochs: 5         # linear warm-up, then cosine to min_lr over (epochs - warmup_epochs)
+min_lr: 1.0e-6
+weight_decay: 0.01       # applied ONLY to tensors with ndim >= 2; none on bias, norm, A_log, D, skip_scale
+grad_clip: 1.0
+ema_decay: 0.999         # EMA weights used for evaluation / model selection / saving
+amp: false               # AMP disabled by default (P1: fp32 SSM math gives cleaner gradients)
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+c_list: [8, 16, 24, 32, 48, 64]
+num_classes: 1
+input_channels: 3
+split_att: "fc"
+bridge: true
+return_logits: true      # P1: model returns logits; use BCEWithLogitsLoss
+
+# ── Deep Supervision (training-only, dropped at inference) ───────────────────
+deep_supervision: true
+ds_weights: [0.4, 0.3, 0.2, 0.1]   # weights for [out5, out4, out3, out2]
+
+# ── Augmentation ─────────────────────────────────────────────────────────────
+aug:
+  hflip: 0.5
+  vflip: 0.0           # REMOVED: thyroid probe is always at the top in ultrasound
+  rotate_deg: 15
+  scale: [0.8, 1.2]    # random zoom
+  translate: 0.10
+  brightness: 0.10
+  gamma: [0.9, 1.1]
+  # NO speckle / noise / contrast attenuation here (reserved for E3/E4)
+
+# ── Loss defaults ────────────────────────────────────────────────────────────
+use_boundary_loss: false
+use_consistency_loss: false
+lambda_boundary: 0.3
+lambda_consistency: 1.0
+boundary_mode: "from_mask"   # "from_mask" (default) or "head"
+boundary_warmup_frac: 0.20   # fraction of epochs for boundary lambda warm-up
+consistency_warmup_frac: 0.20
+boundary_a_ref: 0.05
+boundary_gamma: 0.5
+boundary_w_max: 4.0
+scale_aware_seg: false
+
+# ── Checkpoint / Logging ─────────────────────────────────────────────────────
+save_dir: "checkpoints"      # will be joined with {exp_name}/seed{seed}/
+seed: 42
+resume: false                # if true, resume from latest_model.pth

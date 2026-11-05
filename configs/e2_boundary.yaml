@@ -1,27 +1,18 @@
-exp_name: e2_boundary
-description: "UltraLight VM-UNet with Lesion-Scale-Aware Boundary Supervision"
+# E2 Boundary — lesion-scale-aware boundary supervision
+_base_: "base.yaml"
 
-# Data
-data_root: "/content/tn3k"
-img_size: [256, 256]
-fold: 0
+exp_name: "e2_boundary"
+description: "UltraLight VM-UNet with lesion-scale-aware boundary supervision (E2)."
 
-# Optimization
-batch_size: 16
-epochs: 150
-lr: 0.001
-weight_decay: 0.01
-scheduler: "cosine"
-min_lr: 0.00001
-
-# Loss configurations
+# Loss: seg + scale-aware boundary
 use_boundary_loss: true
-lambda_boundary: 1.0
-boundary_alpha: 1.0
+boundary_mode: "from_mask"   # differentiable morphological gradient on main mask prob
+lambda_boundary: 0.3         # default tuned in Stage B from {0.1, 0.3, 0.5}
+boundary_warmup_frac: 0.20   # linear warm-up from 0 over first 20% of epochs
+boundary_a_ref: 0.05
 boundary_gamma: 0.5
-boundary_min_weight: 1.0
-boundary_max_weight: 5.0
-use_consistency_loss: false
+boundary_w_max: 4.0
+scale_aware_seg: false
 
-# Model
-aux_boundary_head: true
+use_consistency_loss: false
+aux_boundary_head: false

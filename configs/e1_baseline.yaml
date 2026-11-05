@@ -1,22 +1,10 @@
-exp_name: e1_baseline
-description: "UltraLight VM-UNet reproduction baseline on TN3K"
+# E1 Baseline — faithful UltraLight VM-UNet with shared recipe (E1-R*)
+_base_: "base.yaml"
 
-# Data
-data_root: "/content/tn3k"
-img_size: [256, 256]
-fold: 0
+exp_name: "e1_baseline"
+description: "UltraLight VM-UNet reproduction baseline (E1-R*). BCE+Dice loss only."
 
-# Optimization
-batch_size: 16
-epochs: 150
-lr: 0.001
-weight_decay: 0.01
-scheduler: "cosine"
-min_lr: 0.00001
-
-# Loss configurations
+# Loss: seg only
 use_boundary_loss: false
 use_consistency_loss: false
-
-# Inference and Model
 aux_boundary_head: false

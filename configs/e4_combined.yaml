@@ -1,31 +1,27 @@
-exp_name: e4_combined
-description: "UltraLight VM-UNet with Scale-Aware Boundary + Corruption Consistency"
+# E4 Combined — combined boundary + consistency losses
+_base_: "base.yaml"
 
-# Data
-data_root: "/content/tn3k"
-img_size: [256, 256]
-fold: 0
+exp_name: "e4_combined"
+description: "UltraLight VM-UNet with combined boundary + consistency losses (E4)."
 
-# Optimization
-batch_size: 16
-epochs: 150
-lr: 0.001
-weight_decay: 0.01
-scheduler: "cosine"
-min_lr: 0.00001
-
-# Loss configurations
+# Loss: seg + boundary + consistency
 use_boundary_loss: true
-lambda_boundary: 1.0
-boundary_alpha: 1.0
+boundary_mode: "from_mask"
+lambda_boundary: 0.3
+boundary_warmup_frac: 0.20
+boundary_a_ref: 0.05
 boundary_gamma: 0.5
-boundary_min_weight: 1.0
-boundary_max_weight: 5.0
+boundary_w_max: 4.0
+scale_aware_seg: false
 
 use_consistency_loss: true
 lambda_consistency: 1.0
-speckle_sigma: 0.15
-contrast_factor: 0.75
+consistency_warmup_frac: 0.20
 
-# Model
-aux_boundary_head: true
+speckle_sigma_min: 0.05
+speckle_sigma_max: 0.30
+contrast_min: 0.5
+contrast_max: 1.0
+blur_sigma_max: 1.0
+
+aux_boundary_head: false
