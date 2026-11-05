@@ -44,6 +44,7 @@ def list_images(folder):
 
 
 def find_file_robust(folder, name):
+    name = str(name)
     stem = os.path.splitext(name)[0]
     exts = ["", ".jpg", ".jpeg", ".png", ".bmp"]
     for ext in exts:

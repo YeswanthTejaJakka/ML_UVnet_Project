@@ -64,6 +64,7 @@ class TN3KDataset(Dataset):
 
     def _find_file(self, folder, base_name):
         """Robust file lookup: handles zero-pads, extensions, case."""
+        base_name = str(base_name)
         stem = os.path.splitext(base_name)[0]
         exts = ['', '.jpg', '.jpeg', '.png', '.bmp']
 
