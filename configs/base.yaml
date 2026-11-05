@@ -8,7 +8,8 @@ fold: 0
 
 # ── Training ─────────────────────────────────────────────────────────────────
 epochs: 200
-batch_size: 8
+batch_size: 16
+cache_in_ram: true
 lr: 0.001
 warmup_epochs: 5         # linear warm-up, then cosine to min_lr over (epochs - warmup_epochs)
 min_lr: 1.0e-6

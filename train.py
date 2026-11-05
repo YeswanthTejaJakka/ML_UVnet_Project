@@ -130,17 +130,21 @@ def parse_args():
 # ──────────────────────────────────────────────────────────────────────────────
 
 class EMAModel:
-    """Exponential Moving Average of model weights."""
+    """Exponential Moving Average of model weights with step warmup."""
     def __init__(self, model, decay=0.999):
         self.decay = decay
         self.shadow = copy.deepcopy(model.state_dict())
+        self.num_updates = 0
         for k in self.shadow:
             self.shadow[k] = self.shadow[k].float()
 
     @torch.no_grad()
     def update(self, model):
+        self.num_updates += 1
+        # Warmup decay so early in training it tracks actual learned weights
+        decay = min(self.decay, (1.0 + self.num_updates) / (10.0 + self.num_updates))
         for k, v in model.state_dict().items():
-            self.shadow[k] = self.decay * self.shadow[k] + (1.0 - self.decay) * v.float()
+            self.shadow[k].mul_(decay).add_(v.float(), alpha=(1.0 - decay))
 
     def apply_to(self, model):
         """Temporarily load EMA weights into model."""
@@ -288,7 +292,7 @@ def fast_validate(model, loader, device, cfg, epoch=0, total_epochs=200):
 # Training loop
 # ──────────────────────────────────────────────────────────────────────────────
 
-def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device, scaler, epoch, total_epochs):
+def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device, scaler, epoch, total_epochs, ema=None):
     model.train()
     bce_dice_fn    = loss_modules['seg']
     boundary_fn    = loss_modules.get('boundary')
@@ -371,6 +375,9 @@ def train_one_epoch(model, loader, optimizer, loss_modules, cfg, device, scaler,
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
+
+        if ema is not None:
+            ema.update(model)
 
         # Track losses
         total_loss_sum += total_loss.item()
@@ -526,6 +533,7 @@ def main():
 
     # ── Datasets ────────────────────────────────────────────────────────────
     aug_cfg = cfg.get('aug', {})
+    cache_in_ram = cfg.get('cache_in_ram', True)
     train_dataset = TN3KDataset(
         data_root=cfg['data_root'],
         split='train',
@@ -533,6 +541,7 @@ def main():
         img_size=tuple(cfg.get('img_size', [256, 256])),
         augment=True,
         aug_cfg=aug_cfg,
+        cache_in_ram=cache_in_ram,
     )
     val_dataset = TN3KDataset(
         data_root=cfg['data_root'],
@@ -540,6 +549,7 @@ def main():
         fold=cfg.get('fold', 0),
         img_size=tuple(cfg.get('img_size', [256, 256])),
         augment=False,
+        cache_in_ram=cache_in_ram,
     )
 
     # P2: speed settings
@@ -643,12 +653,9 @@ def main():
         # --- Train ---
         t_data_start = time.time()
         train_res = train_one_epoch(
-            model, train_loader, optimizer, loss_modules, cfg, device, scaler, epoch, epochs
+            model, train_loader, optimizer, loss_modules, cfg, device, scaler, epoch, epochs, ema=ema
         )
         t_train = time.time() - t0
-
-        # Update EMA
-        ema.update(model)
 
         # Advance scheduler
         scheduler.step()
