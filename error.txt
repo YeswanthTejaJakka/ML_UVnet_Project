@@ -13,19 +13,56 @@ data_root: /content/tn3k  |  fold: 0
   Entries — train: 2303, val: 576, total: 2879
 
 ## 3. File Matching
+  Train matched: 2303 / 2303
+  Val   matched: 576 / 576
+  Total matched: 2879 / 2879
+  Trainval-image on disk: 2879
+
+  No unmatched entries — all fold entries matched successfully.
+
+## 4. Train/Val Disjointness
+  Train ∩ Val = ∅ ✓
+
+## 5. Test-Set Hash Overlap Check
+  Test set: 614 unique hashes
+  No hash overlap between trainval and test ✓
+
+## 6. Image & Mask Statistics (from matched pairs)
+  Width  — min: 229, median: 375, max: 1324
+  Height — min: 225, median: 337, max: 817
+  Mask values (union of sample): [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255]
+  Empty masks in sample: 0 / 200
+  Shape mismatches in sample: 0 / 200
+
+## 7. Lesion-Size Category Counts (sample)
+  small: 31
+  medium: 77
+  large: 92
+  empty: 0
+
+## 8. Test Set Lesion Categories
+  small: 98
+  medium: 181
+  large: 221
+  empty: 0
+
+## 9. Data Coverage Summary & Decision
+  Images on disk (trainval): 2879
+  Images in fold JSON:       2879
+  Successfully matched:      2879
+  Disk count matches fold JSON — no extra images.
+
+## 10. Qualitative Overlays (12 samples)
 Traceback (most recent call last):
-  File "/content/ML_UVnet/tools/audit_dataset.py", line 393, in <module>
+  File "/content/ML_UVnet/tools/audit_dataset.py", line 394, in <module>
     main()
     ~~~~^^
-  File "/content/ML_UVnet/tools/audit_dataset.py", line 389, in main
+  File "/content/ML_UVnet/tools/audit_dataset.py", line 390, in main
     audit(args.data_root, args.fold, args.out_dir)
     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/content/ML_UVnet/tools/audit_dataset.py", line 186, in audit
-    img_p,  ir = find_file_robust(img_dir,  name)
-                 ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
-  File "/content/ML_UVnet/tools/audit_dataset.py", line 47, in find_file_robust
-    stem = os.path.splitext(name)[0]
-           ~~~~~~~~~~~~~~~~^^^^^^
+  File "/content/ML_UVnet/tools/audit_dataset.py", line 342, in audit
+    out_path = os.path.join(overlay_dir, f"overlay_{i:02d}_{os.path.splitext(name)[0]}.png")
+                                                            ~~~~~~~~~~~~~~~~^^^^^^
   File "<frozen posixpath>", line 118, in splitext
 TypeError: expected str, bytes or os.PathLike object, not int
 ---------------------------------------------------------------------------
