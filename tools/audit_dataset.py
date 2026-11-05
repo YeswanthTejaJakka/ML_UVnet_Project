@@ -174,6 +174,8 @@ def audit(data_root, fold, out_dir):
             fold_train_names = []
             fold_val_names = []
         log(f"  Fold JSON: {fold_file}")
+        fold_train_names = [str(x) for x in fold_train_names]
+        fold_val_names = [str(x) for x in fold_val_names]
         log(f"  Entries — train: {len(fold_train_names)}, val: {len(fold_val_names)}, total: {len(fold_train_names)+len(fold_val_names)}")
         log()
 
@@ -339,7 +341,7 @@ def audit(data_root, fold, out_dir):
         random.seed(1234)
         overlay_sample = random.sample(all_matched, min(12, len(all_matched)))
         for i, (name, img_p, mask_p) in enumerate(overlay_sample):
-            out_path = os.path.join(overlay_dir, f"overlay_{i:02d}_{os.path.splitext(name)[0]}.png")
+            out_path = os.path.join(overlay_dir, f"overlay_{i:02d}_{os.path.splitext(str(name))[0]}.png")
             save_overlay(img_p, mask_p, out_path)
             log(f"  Saved: {os.path.basename(out_path)}")
     else:
