@@ -643,8 +643,11 @@ def main():
             if os.path.exists(csv_path):
                 history = pd.read_csv(csv_path).to_dict('records')
         except RuntimeError as e:
-            print(f"[ERROR] Cannot resume: {e}")
-            sys.exit(1)
+            print(f"[INFO] {e}")
+            print("  Starting fresh training run from epoch 1 with the new code version...")
+            start_epoch = 1
+            best_val_dice = 0.0
+            history = []
     elif cfg.get('resume', False):
         print(f"[INFO] No checkpoint found at {latest_ckpt_path}. Starting fresh.")
 
