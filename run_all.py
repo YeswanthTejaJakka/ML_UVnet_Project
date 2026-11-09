@@ -25,7 +25,7 @@ def parse_args():
                         help='Stage to run: A (recipe ladder), B (loss tuning), C (final runs), all, smoke (2 epochs)')
     parser.add_argument('--seeds', type=int, nargs='+', default=[42, 43, 44],
                         help='Seeds for Stage C')
-    parser.add_argument('--data_root', type=str, default='/content/tn3k')
+    parser.add_argument('--data_root', type=str, default='data/tn3k')
     parser.add_argument('--fold', type=int, default=0)
     parser.add_argument('--checkpoints_root', type=str, default='checkpoints')
     parser.add_argument('--reports_dir', type=str, default='reports')
@@ -183,6 +183,8 @@ def run_stage_c_final(args):
                 '--fold', str(args.fold),
                 '--seed', str(seed),
             ]
+            if args.checkpoints_root:
+                cmd.extend(['--save_dir', args.checkpoints_root])
             if args.resume:
                 cmd.append('--resume')
             run_command(cmd)

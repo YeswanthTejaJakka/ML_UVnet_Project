@@ -58,7 +58,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Deliverables Generator")
     parser.add_argument('--checkpoints_root', type=str, default='checkpoints',
                         help='Root directory containing e1_baseline, e2_boundary, etc.')
-    parser.add_argument('--data_root', type=str, default='/content/tn3k')
+    parser.add_argument('--data_root', type=str, default='data/tn3k')
     parser.add_argument('--output_dir', type=str, default=None)
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--seed', type=int, default=42)

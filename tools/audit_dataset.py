@@ -384,7 +384,7 @@ def audit(data_root, fold, out_dir):
 
 def main():
     parser = argparse.ArgumentParser(description="TN3K Dataset Integrity Audit")
-    parser.add_argument("--data_root", type=str, default="/content/tn3k")
+    parser.add_argument("--data_root", type=str, default="data/tn3k")
     parser.add_argument("--fold",      type=int, default=0)
     parser.add_argument("--out_dir",   type=str, default="audit")
     args = parser.parse_args()

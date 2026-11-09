@@ -2,7 +2,7 @@
 # Experiment-specific configs inherit these defaults.
 
 # ── Data ─────────────────────────────────────────────────────────────────────
-data_root: "/content/tn3k"
+data_root: "data/tn3k"
 img_size: [256, 256]
 fold: 0
 

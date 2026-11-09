@@ -49,7 +49,7 @@ from utils.corruptions import (
 def parse_args():
     parser = argparse.ArgumentParser(description="UltraLight VM-UNet Evaluation Benchmark")
     parser.add_argument('--weights', type=str, required=True, help='Path to model checkpoint (.pth)')
-    parser.add_argument('--data_root', type=str, default='/content/tn3k', help='Dataset root path')
+    parser.add_argument('--data_root', type=str, default='data/tn3k', help='Dataset root path')
     parser.add_argument('--fold', type=int, default=0, help='Fold index')
     parser.add_argument('--output_dir', type=str, default='eval_results', help='Output directory')
     parser.add_argument('--batch_size', type=int, default=16)
