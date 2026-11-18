@@ -1,0 +1,63 @@
+amp: false
+aug:
+  brightness: 0.1
+  gamma:
+  - 0.9
+  - 1.1
+  hflip: 0.5
+  rotate_deg: 15
+  scale:
+  - 0.8
+  - 1.2
+  translate: 0.1
+  vflip: 0.0
+aux_boundary_head: false
+batch_size: 16
+boundary_a_ref: 0.05
+boundary_gamma: 0.5
+boundary_mode: from_mask
+boundary_w_max: 4.0
+boundary_warmup_frac: 0.2
+bridge: true
+c_list:
+- 8
+- 16
+- 24
+- 32
+- 48
+- 64
+cache_in_ram: true
+code_version: 24e8160e62f3
+consistency_warmup_frac: 0.2
+data_root: /root/Yeshwanth/data/tn3k
+deep_supervision: true
+description: UltraLight VM-UNet with lesion-scale-aware boundary supervision (E2).
+ds_weights:
+- 0.4
+- 0.3
+- 0.2
+- 0.1
+ema_decay: 0.999
+epochs: 200
+exp_name: e2_boundary
+fold: 0
+grad_clip: 1.0
+img_size:
+- 256
+- 256
+input_channels: 3
+lambda_boundary: 0.3
+lambda_consistency: 1.0
+lr: 0.001
+min_lr: 1.0e-06
+num_classes: 1
+resume: true
+return_logits: true
+save_dir: /root/Yeshwanth/checkpoints/e2_boundary/seed42
+scale_aware_seg: false
+seed: 42
+split_att: fc
+use_boundary_loss: true
+use_consistency_loss: false
+warmup_epochs: 5
+weight_decay: 0.01

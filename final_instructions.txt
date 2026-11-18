@@ -1,0 +1,195 @@
+ROLE
+You are a senior ML engineer completing the final, INFERENCE-ONLY phase of a
+thyroid-ultrasound segmentation project (UltraLight VM-UNet on TN3K, experiments
+E1-E4). Read FOR_CLAUDE_PROJECT_BRIEF.txt completely before acting. It is the source
+of truth. The deliverable is a rigorous, reproducible, honest final report inside
+local_runner.ipynb. Success means an evaluator trusts every number, whatever the
+outcome. Do NOT tune anything toward a desired result.
+
+HARD CONSTRAINTS
+- No retraining; use only the four best_ema.pth checkpoints.
+- Do not modify models/, losses/, dataset/, utils/metrics.py, utils/corruptions.py,
+  train.py, the input pipeline, or the format/paths of existing deliverables.
+- Do not alter existing notebook cells; append only (after the LAST existing cell,
+  which the brief says is cell 32; verify).
+- All new outputs go to UltraLightVMUNet_TN3K_seed42_results/results/. Never
+  overwrite existing files.
+- Never invent, estimate, or hand-type a number. Every number in a table, plot, or
+  narrative must come from code that ran. If something cannot be measured, say so
+  and explain why.
+
+PHASE 0 - RECONNAISSANCE (report findings before writing analysis code)
+1. Read utils/corruptions.py, utils/metrics.py, generate_deliverables.py,
+   evaluate.py, train.py, configs/*.yaml, dataset/tn3k_dataset.py. Record:
+   - the exact mathematical form of add_speckle_noise and reduce_ultrasound_contrast,
+     which RNG they use (global torch RNG? which device?), and whether sigma=0 /
+     factor=1.0 are the identity;
+   - how E3/E4 corruption is applied at TRAINING time: fixed severity or random
+     ranges, probability of application, and ALL other augmentations in base.yaml.
+     This decides which test conditions are truly in-distribution;
+   - the prediction threshold, whether evaluation used autocast/AMP, and how metrics
+     treat empty predictions or empty masks (including HD95);
+   - how MetricTracker aggregates (mean of per-image values vs pooled), and whether it
+     exposes per-image values;
+   - how measure_model_efficiency counts FLOPs and whether custom Mamba selective-scan
+     kernels are included.
+2. The results table labels the baseline "E1 Baseline (E1-R*)", which suggests E1 may
+   have been re-run. Identify which run the e1_baseline checkpoint corresponds to.
+3. Inspect existing CSVs and training histories. Check for an existing per-image file.
+4. Check locally for a second thyroid dataset. Do not download anything.
+5. Check whether a CPU fallback scan exists WITHOUT editing the architecture file.
+Write a short "Phase 0 findings" summary (in your reply and in the notebook).
+
+PHASE 1 - FOUNDATION: new module robustness_suite.py (repo root)
+Do not edit existing modules. Provide:
+- Corruptions: reuse existing speckle and contrast functions; add gaussian (additive,
+  clamp to [0,1]) and poisson with a "peak" parameter (scaled = x*peak;
+  noisy = poisson(scaled)/peak; clamp). Add unit tests: sigma=0 / factor=1.0 return the
+  input; outputs lie in [0,1]; shapes are preserved; empirical noise std is plausible.
+- IDENTICAL INPUTS FOR ALL MODELS: loop order is condition -> batch -> models. For each
+  (condition, noise_seed, batch_idx), seed the global torch CPU+CUDA RNG with a value
+  derived via zlib.crc32 of the string f"{noise_seed}|{corruption}|{level}|{batch_idx}"
+  (never Python hash()), generate the corrupted batch ONCE, then feed that exact tensor
+  to all four models. Use the unshuffled loader with batch_size=16.
+- Per-image metrics through the existing utils/metrics.py functions, unchanged: Dice,
+  IoU, BIoU(d=7), BIoU(d=2), BF1, HD95, empty-prediction flag, category, id. Match the
+  original evaluation threshold and precision.
+- TIERED COMPUTE: first time metric computation on a few images and print a runtime
+  estimate for the full grid. Use multiprocessing/joblib for CPU metrics if available. If
+  the estimate exceeds ~30 min: compute Dice/IoU/BIoU for all 3 noise seeds and HD95/BF1
+  for noise seed 0 only, and state this in the report.
+- SHARD CACHING: save each (corruption, level, noise_seed) result to its own file so a
+  crash loses nothing; skip existing shards unless FORCE_RERUN=True.
+- Set all seeds; record any nondeterminism you observe.
+
+PHASE 2 - GATE: METRIC CONSISTENCY (runs before anything else is trusted)
+Recompute clean-test metrics for all four checkpoints through the new code path and
+compare to final_test_comparison.csv and lesion_scale_analysis.csv, metric by metric.
+Tolerance: |diff| <= 1e-4 for Dice/IoU/BIoU; a justified tolerance for HD95/BF1. Save
+metric_consistency_check.csv (model, metric, stored, recomputed, abs_diff, PASS/FAIL)
+and per_image_metrics_clean.csv (4 models x 614 images). If anything FAILS, STOP and
+diagnose (EMA vs raw weights, wrong checkpoint for E1-R*, threshold, AMP, aggregation
+method). Fix your pipeline, never the stored results, and document the cause. Do not
+continue until the gate passes or the discrepancy is fully explained.
+
+PHASE 3 - NOISE ROBUSTNESS SUITE (HIGH)
+Conditions (all four models, 3 noise seeds):
+- Speckle sigma: 0, 0.05, 0.10, 0.15, 0.20, 0.25
+- Gaussian sigma: 0, 0.05, 0.10, 0.15, 0.20 (on [0,1] intensity scale)
+- Contrast factor: 1.0, 0.9, 0.75, 0.5, 0.3
+- Poisson peak: clean, 255, 60, 30, 15 (LOW priority; run last)
+- Optional: combined speckle(0.15)+contrast(0.75) matching the E3/E4 training corruption
+Metrics: Dice, BIoU, HD95 overall and by lesion scale, plus the empty-prediction rate.
+- PRE-REGISTRATION: before the results cell, add a markdown cell stating
+  H1: "E3/E4 degrade more slowly than E1/E2 under speckle noise" and the decision rule:
+  H1 is SUPPORTED only if, for the speckle sweep, BOTH (a) Dice retention
+  (Dice_corrupt/Dice_clean) and (b) absolute Dice drop favour E3/E4 over E1, with the
+  95% paired-bootstrap CI of the AUC difference excluding zero. Absolute Dice at each
+  noise level must also be reported, because retention can flatter a model with lower
+  clean Dice.
+- Label every level as in-distribution (matches the training corruption you found in
+  Phase 0), interpolation/extrapolation (other speckle/contrast levels), or
+  out-of-distribution (Gaussian, Poisson). Gaussian and Poisson are the real
+  generalisation test; in-distribution levels are not evidence of generalisation.
+- STATISTICS: average each image's score over noise seeds FIRST, then bootstrap over
+  images (10,000 resamples, paired across models via the same indices, vectorised).
+  Compute retention and AUC as ratio-of-means inside each resample (not mean of
+  per-image ratios). PRIMARY family = {speckle, gaussian, contrast} x {E2,E3,E4 vs E1}
+  on AUC of retention: 9 tests, Holm-corrected. Level-wise comparisons are exploratory and
+  must be labelled so, uncorrected.
+- Figures: Dice vs level per corruption (4 models, mean +/- std over noise seeds, one
+  panel per corruption, marking in-distribution levels); retention curves;
+  small-lesion-only panel; a "corruption examples" figure showing one image at every
+  level of each corruption; a qualitative figure of one image under increasing noise with
+  all four predictions.
+- Report the outcome as it is. If E3/E4 are not more robust, say so plainly and offer
+  clearly-labelled hypotheses (e.g. fixed-severity training, capacity limits of a 49K-param
+  model, single seed).
+Save: robustness_results_raw.csv, robustness_summary.csv, robustness_significance.csv,
+robustness_curves.png, robustness_retention.png, robustness_small_lesions.png,
+corruption_examples.png, robustness_qualitative.png.
+
+PHASE 4 - LATENCY / THROUGHPUT (HIGH)
+- Batch sizes 1, 4, 8, 16 (32 if memory allows). Model forward only, input already on GPU,
+  torch.inference_mode(), same precision as evaluation. 50+ warm-up and 200+ timed
+  iterations using CUDA events (or synchronize); report median and IQR. Interleave models
+  across repeated rounds in randomised order to cancel GPU clock/thermal drift. Record GPU
+  name, driver/CUDA, torch version.
+- Throughput (img/s) = batch / latency. Params/FLOPs: use the existing
+  measure_model_efficiency / model_efficiency_benchmark.csv; state how FLOPs were counted
+  and whether the selective-scan kernel is included (profilers often miss it). Do not
+  present 0.060 G as exact if it is a convention-based estimate.
+- Main table: Model | Params (M) | FLOPs (G) | Latency ms (batch=1) | Throughput FPS
+  (batch=16).
+- Since ~9.4 ms for a 0.06 GFLOP model suggests the run is dominated by kernel-launch
+  overhead rather than arithmetic, check whether latency is nearly flat across batch sizes
+  and say what the data shows.
+- CPU: if a fallback exists without editing the architecture, measure it and label it
+  "fallback scan, not the CUDA kernel". Otherwise explain precisely why CPU latency is
+  unavailable. Never leave a bare "N/A".
+- E1-E4 share one architecture at inference; report the spread across models as
+  measurement noise.
+Save: latency_throughput_sweep.csv, latency_throughput.png, model_efficiency_final_table.csv.
+
+PHASE 5 - FAILURE ANALYSIS AND STATISTICS (HIGH)
+- From per_image_metrics_clean.csv: failure = Dice < 0.5. Grouped bar chart of failure
+  counts by scale x model, plus failure rates in percent. Reconcile with the brief (E1
+  59/614, E4 68/614, 35 failed by all four: 24 small, 7 medium, 4 large); if different,
+  investigate and report.
+- The 35 shared failures: save all_models_fail_cases.csv and gallery figures (image / ground
+  truth / four predictions), paged at <=8 cases per figure; show the 8 worst in the notebook.
+  Compare against non-failures using DESCRIPTIVE statistics and effect sizes (lesion area,
+  lesion-to-background contrast, boundary sharpness, touches border, centroid position).
+  Describe associations only; do not claim causes.
+- Significance table: take overall paired-bootstrap results from ablation_study_summary.csv
+  and ADD per-scale comparisons (small n=127, medium n=242, large n=245) for E2/E3/E4 vs E1,
+  labelled EXPLORATORY (post-hoc subgroups). Specifically report the E4 vs E1 small-lesion
+  difference with its CI, and the E4 medium/large decreases, so the trade-off is explicit.
+Save: failure_counts_by_scale.csv/.png, all_models_fail_cases.csv,
+all_models_fail_gallery_p*.png, statistical_significance_table.csv.
+
+PHASE 6 - TRAINING CURVES ANALYSIS
+Compute from the saved histories: best epoch per model, final-vs-best gap, validation
+volatility over the last 20 epochs, train-val gap, and plateau epoch. Write the narrative
+from those values. Save training_curves_analysis.md.
+
+PHASE 7 - CROSS-DATASET: LIMITATIONS CELL ONLY
+Do not fabricate or download. Write a markdown cell covering: single dataset; single seed
+(42) and single fold, so no across-run variance estimate and small observed deltas may be
+within seed noise; synthetic corruptions as a proxy for real device/acquisition shift; what
+would be done next (a second dataset such as TNSCUI2020 or DDTI, zero-shot transfer with
+these checkpoints and identical metrics, 3-5 training seeds, a noise-augmentation-only
+control to separate augmentation from the consistency loss). If Phase 0 found a second
+dataset locally, ask before using it. Save limitations_and_future_work.md.
+
+PHASE 8 - NOTEBOOK INTEGRATION AND FINAL REPORT
+- Back up local_runner.ipynb to local_runner.backup.ipynb first. Insert cells with nbformat
+  programmatically, tagged metadata {"tags": ["final_analysis"]}, so re-running the insertion
+  script never duplicates cells.
+- Order: setup/imports -> Phase 0 findings -> consistency gate -> H1 pre-registration
+  (markdown) -> corruption examples -> robustness suite -> robustness plots/significance ->
+  latency & efficiency table -> failure analysis -> significance table -> training curve
+  analysis -> limitations -> final summary -> reproducibility.
+- Code cells are self-contained (own imports; use RESULTS_ROOT, CKPT_ROOT, RESULTS_DIR from
+  cell 5), read cached CSVs, and print cleanly formatted tables.
+- Narrative cells: write them AFTER results exist, with numbers filled programmatically from
+  the saved CSVs. The final summary states, for each of E2/E3/E4: where it helped, where it
+  hurt, whether the evidence is statistically supported, and whether H1 was supported. Do not
+  write "E4 is preferred" or similar unless the data supports it. State the zero-inference-
+  overhead property as a factual strength. Save final_analysis_summary.md.
+- Reproducibility cell: Python/torch/CUDA/mamba-ssm versions, seeds, sha256 of each
+  checkpoint, GPU name, date.
+
+VERIFICATION BEFORE DECLARING DONE
+1. Execute the appended notebook cells end to end on the GPU (nbconvert --execute or
+   equivalent); fix all errors; keep outputs in the notebook.
+2. Confirm every output file listed exists, is non-empty, and opens.
+3. Confirm existing cells are unchanged versus the backup and that no protected file changed
+   (hash/git diff).
+4. Spot-check at least five numbers in the narrative against the CSVs.
+5. Re-run the consistency gate.
+
+FINAL REPLY FORMAT
+(1) What was added and where; (2) new files; (3) Phase 2 gate result; (4) Phase 0 findings
+that affected interpretation; (5) the headline robustness result, stated plainly, including
+whether H1 was supported; (6) deviations or surprises; (7) known limitations. Do not oversell.

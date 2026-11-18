@@ -1,0 +1,358 @@
+diff --git a/generate_deliverables.py b/generate_deliverables.py
+index 9535b2e..792d1f5 100644
+--- a/generate_deliverables.py
++++ b/generate_deliverables.py
+@@ -50,6 +50,7 @@ from utils.metrics import (
+     calculate_hd95,
+     lesion_level_detection,
+     measure_model_efficiency,
++    MetricTracker,
+ )
+ from utils.corruptions import add_speckle_noise
+ 
+@@ -62,9 +63,247 @@ def parse_args():
+     parser.add_argument('--output_dir', type=str, default=None)
+     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+     parser.add_argument('--seed', type=int, default=42)
++    parser.add_argument('--reports_only', action='store_true',
++                        help='Only (re)write ablation_study_summary.csv, RESEARCH_FINDINGS.md and '
++                             'failure_analysis.md from the CSVs already in the output directory.')
+     return parser.parse_args()
+ 
+ 
++# ──────────────────────────────────────────────────────────────────────────────
++# Deliverables 7–9: written reports, derived only from the CSVs produced above
++# ──────────────────────────────────────────────────────────────────────────────
++
++ABLATION_COMPONENTS = {
++    'E1 Baseline (E1-R*)': (False, False),
++    'E2 Boundary':         (True,  False),
++    'E3 Consistency':      (False, True),
++    'E4 Combined':         (True,  True),
++}
++
++
++def _paired_bootstrap(diff, n_boot=10000, seed=0):
++    """Mean of paired per-case differences with a 95% bootstrap CI."""
++    rng = np.random.default_rng(seed)
++    diff = np.asarray(diff, dtype=float)
++    idx = rng.integers(0, len(diff), size=(n_boot, len(diff)))
++    means = diff[idx].mean(axis=1)
++    lo, hi = np.percentile(means, [2.5, 97.5])
++    return float(diff.mean()), float(lo), float(hi)
++
++
++def _md_table(df, floatfmt=4):
++    cols = list(df.columns)
++    lines = ['| ' + ' | '.join(str(c) for c in cols) + ' |',
++             '|' + '|'.join('---' for _ in cols) + '|']
++    for _, row in df.iterrows():
++        cells = []
++        for c in cols:
++            v = row[c]
++            cells.append(f"{v:.{floatfmt}f}" if isinstance(v, (float, np.floating)) else str(v))
++        lines.append('| ' + ' | '.join(cells) + ' |')
++    return '\n'.join(lines)
++
++
++def write_text_reports(out_dir, seed=42):
++    """Writes ablation_study_summary.csv, RESEARCH_FINDINGS.md and failure_analysis.md."""
++    def _read(name):
++        p = os.path.join(out_dir, name)
++        return pd.read_csv(p) if os.path.exists(p) else None
++
++    test_df  = _read('final_test_comparison.csv')
++    scale_df = _read('lesion_scale_analysis.csv')
++    eff_df   = _read('model_efficiency_benchmark.csv')
++    train_df = _read('training_summary.csv')
++    cases_df = _read('qualitative_cases.csv')
++    if test_df is None or scale_df is None or cases_df is None:
++        print("[Reports] final_test_comparison / lesion_scale_analysis / qualitative_cases missing — "
++              "run the full generator first. Skipping written reports.")
++        return
++
++    base = 'E1 Baseline (E1-R*)'
++    models_present = [m for m in ABLATION_COMPONENTS if m in set(test_df['model'])]
++    dice_col = {m: f'{m}_dice' for m in models_present}
++
++    # ── 7. Ablation summary ──────────────────────────────────────────────────
++    t = test_df.set_index('model')
++    s = scale_df.set_index('model')
++    tr = train_df.set_index('experiment') if train_df is not None else None
++    base_row, base_scale = t.loc[base], s.loc[base]
++    ablation_rows = []
++    for m in models_present:
++        bnd, cons = ABLATION_COMPONENTS[m]
++        row = {
++            'model': m,
++            'boundary_loss': 'yes' if bnd else 'no',
++            'consistency_loss': 'yes' if cons else 'no',
++            'best_val_dice': float(tr.loc[m, 'best_val_dice_mean']) if tr is not None and m in tr.index else np.nan,
++            'test_dice': t.loc[m, 'test_dice'],
++            'test_iou': t.loc[m, 'test_iou'],
++            'biou_d7': t.loc[m, 'biou_d7'],
++            'bf1': t.loc[m, 'bf1'],
++            'hd95_px': t.loc[m, 'hd95_px'],
++            'small_dice': s.loc[m, 'small_dice'],
++            'delta_test_dice_vs_E1': round(t.loc[m, 'test_dice'] - base_row['test_dice'], 4),
++            'delta_biou_d7_vs_E1': round(t.loc[m, 'biou_d7'] - base_row['biou_d7'], 4),
++            'delta_bf1_vs_E1': round(t.loc[m, 'bf1'] - base_row['bf1'], 4),
++            'delta_hd95_vs_E1': round(t.loc[m, 'hd95_px'] - base_row['hd95_px'], 2),
++            'delta_small_dice_vs_E1': round(s.loc[m, 'small_dice'] - base_scale['small_dice'], 4),
++        }
++        if m != base:
++            d, lo, hi = _paired_bootstrap(cases_df[dice_col[m]] - cases_df[dice_col[base]], seed=seed)
++            row.update({'paired_delta_dice_mean': round(d, 4),
++                        'paired_delta_dice_ci95_lo': round(lo, 4),
++                        'paired_delta_dice_ci95_hi': round(hi, 4),
++                        'significant_at_95': 'yes' if (lo > 0 or hi < 0) else 'no'})
++        ablation_rows.append(row)
++    abl_df = pd.DataFrame(ablation_rows)
++    abl_csv = os.path.join(out_dir, 'ablation_study_summary.csv')
++    abl_df.to_csv(abl_csv, index=False)
++    print(f"Saved: {abl_csv}")
++
++    # ── 9. Failure analysis (computed first; findings reference it) ──────────
++    cats = ['small', 'medium', 'large']
++    fail_thr = 0.5
++    fail_rows = []
++    for m in models_present:
++        r = {'model': m}
++        for c in cats + ['all']:
++            sub = cases_df if c == 'all' else cases_df[cases_df['category'] == c]
++            r[f'{c}: n<{fail_thr}'] = f"{int((sub[dice_col[m]] < fail_thr).sum())}/{len(sub)}"
++        r['dice==0 (missed)'] = int((cases_df[dice_col[m]] <= 1e-6).sum())
++        fail_rows.append(r)
++    fail_tbl = pd.DataFrame(fail_rows)
++
++    best_model = max(models_present, key=lambda m: t.loc[m, 'test_dice'])
++    others = [m for m in models_present]
++    all_fail = cases_df[np.all([cases_df[dice_col[m]] < fail_thr for m in others], axis=0)]
++    all_fail_by_cat = all_fail['category'].value_counts().reindex(cats, fill_value=0)
++
++    worst = cases_df.assign(mean_dice=cases_df[[dice_col[m] for m in others]].mean(axis=1)) \
++                    .sort_values('mean_dice').head(10)
++    worst_tbl = worst[['case_id', 'category'] + [dice_col[m] for m in others] + ['mean_dice']].copy()
++    worst_tbl.columns = ['case_id', 'category'] + others + ['mean']
++
++    reg_lines = []
++    for m in models_present:
++        if m == base:
++            continue
++        diff = cases_df[dice_col[m]] - cases_df[dice_col[base]]
++        reg_lines.append(f"| {m} | {int((diff > 0.05).sum())} | {int((diff < -0.05).sum())} | "
++                         f"{diff.min():.3f} | {diff.max():.3f} |")
++
++    fa = []
++    fa.append(f"# Failure Analysis — TN3K test set (seed {seed})\n")
++    fa.append("_Auto-generated by `generate_deliverables.py` from `qualitative_cases.csv` "
++              "(per-case test Dice of the best-EMA checkpoint of each model)._\n")
++    fa.append(f"## 1. Failure counts (Dice < {fail_thr}) by lesion scale\n")
++    fa.append(_md_table(fail_tbl) + "\n")
++    small_fail_rates = {m: (cases_df[cases_df['category'] == 'small'][dice_col[m]] < fail_thr).mean()
++                        for m in models_present}
++    large_fail_rates = {m: (cases_df[cases_df['category'] == 'large'][dice_col[m]] < fail_thr).mean()
++                        for m in models_present}
++    fa.append(f"Small lesions fail at {min(small_fail_rates.values()):.1%}–{max(small_fail_rates.values()):.1%} "
++              f"across models, versus {min(large_fail_rates.values()):.1%}–{max(large_fail_rates.values()):.1%} "
++              "for large lesions.\n")
++    fa.append(f"## 2. Cases that every model fails (Dice < {fail_thr})\n")
++    fa.append(f"{len(all_fail)} of {len(cases_df)} test cases are failed by all {len(others)} models "
++              f"(small: {all_fail_by_cat['small']}, medium: {all_fail_by_cat['medium']}, "
++              f"large: {all_fail_by_cat['large']}). These are failures of the shared backbone/recipe, "
++              "not of any one auxiliary loss.\n")
++    fa.append("## 3. Ten hardest cases (lowest mean Dice across models)\n")
++    fa.append(_md_table(worst_tbl, floatfmt=3) + "\n")
++    fa.append("## 4. Per-case changes vs E1 baseline\n")
++    fa.append("| Model | cases improved by >0.05 Dice | cases worsened by >0.05 Dice | largest drop | largest gain |")
++    fa.append("|---|---|---|---|---|")
++    fa.extend(reg_lines)
++    fa.append("\nLarge per-case swings in both directions alongside small mean differences indicate "
++              "that the auxiliary losses redistribute errors rather than uniformly improving cases.\n")
++    fa.append("## 5. Figures\n")
++    fa.append("- `qualitative_failures.png` — 6 lowest-Dice cases for E4 Combined\n"
++              "- `qualitative_best_gains.png` — 6 largest E4-over-E1 gains\n"
++              "- `qualitative_comparison_8_cases.png` — stratified 3 small / 3 medium / 2 large\n")
++    fa_path = os.path.join(out_dir, 'failure_analysis.md')
++    with open(fa_path, 'w', encoding='utf-8') as f:
++        f.write('\n'.join(fa))
++    print(f"Saved: {fa_path}")
++
++    # ── 8. Research findings ─────────────────────────────────────────────────
++    def _fmt_delta(v, nd=4):
++        return f"{v:+.{nd}f}"
++
++    rf = []
++    rf.append(f"# Research Findings — UltraLight VM-UNet on TN3K (fold 0, seed {seed})\n")
++    rf.append("_Auto-generated by `generate_deliverables.py` from the CSVs in this folder. "
++              "All numbers are on the held-out TN3K test set (614 images) using the best-EMA "
++              "checkpoint selected on validation Dice._\n")
++    rf.append("## 1. Setup\n")
++    rf.append("- Model: UltraLight VM-UNet (~0.05M parameters), official `mamba_ssm` CUDA selective-scan kernels\n"
++              "- Training: 200 epochs, batch 16, cosine LR with warm-up, EMA, deep supervision\n"
++              "- E1: segmentation loss only · E2: + scale-aware boundary loss (λ=0.3) · "
++              "E3: + corruption-aware consistency loss (λ=1.0) · E4: E2 + E3\n")
++    rf.append("## 2. Main test results\n")
++    rf.append(_md_table(test_df) + "\n")
++    rf.append("## 3. Ablation: change vs E1 baseline\n")
++    cols = ['model', 'delta_test_dice_vs_E1', 'delta_biou_d7_vs_E1', 'delta_bf1_vs_E1',
++            'delta_hd95_vs_E1', 'delta_small_dice_vs_E1']
++    rf.append(_md_table(abl_df[cols]) + "\n")
++    rf.append("Paired bootstrap (10,000 resamples over the 614 test cases) for the mean per-case Dice difference vs E1:\n")
++    for r in ablation_rows:
++        if r['model'] == base:
++            continue
++        rf.append(f"- **{r['model']}**: {_fmt_delta(r['paired_delta_dice_mean'])} "
++                  f"(95% CI {_fmt_delta(r['paired_delta_dice_ci95_lo'])} to {_fmt_delta(r['paired_delta_dice_ci95_hi'])}) — "
++                  f"{'statistically distinguishable from E1' if r['significant_at_95'] == 'yes' else 'not distinguishable from E1'}")
++    rf.append("")
++    rf.append("## 4. Lesion-scale analysis\n")
++    rf.append(_md_table(scale_df) + "\n")
++    best_small = max(models_present, key=lambda m: s.loc[m, 'small_dice'])
++    rf.append(f"Best small-lesion Dice: **{best_small}** ({s.loc[best_small, 'small_dice']:.4f}, "
++              f"{_fmt_delta(s.loc[best_small, 'small_dice'] - base_scale['small_dice'])} vs E1). "
++              f"Small lesions remain the hardest scale for every model.\n")
++
++    rf.append("## 5. Key findings\n")
++    best_dice = best_model
++    best_bnd = max(models_present, key=lambda m: t.loc[m, 'bf1'])
++    best_hd = min(models_present, key=lambda m: t.loc[m, 'hd95_px'])
++    findings = [
++        f"Highest overall test Dice: **{best_dice}** ({t.loc[best_dice, 'test_dice']:.4f}).",
++        f"Best boundary F1: **{best_bnd}** ({t.loc[best_bnd, 'bf1']:.4f}, "
++        f"{_fmt_delta(t.loc[best_bnd, 'bf1'] - base_row['bf1'])} vs E1).",
++        f"Lowest HD95: **{best_hd}** ({t.loc[best_hd, 'hd95_px']:.2f} px).",
++    ]
++    if tr is not None:
++        best_val = max(models_present, key=lambda m: tr.loc[m, 'best_val_dice_mean'])
++        findings.append(f"Highest validation Dice: **{best_val}** "
++                        f"({tr.loc[best_val, 'best_val_dice_mean']:.4f}); "
++                        f"{'this matches' if best_val == best_dice else 'this differs from'} the test-set ranking.")
++    n_sig = sum(1 for r in ablation_rows if r.get('significant_at_95') == 'yes')
++    findings.append(f"{n_sig} of {len(ablation_rows) - 1} auxiliary-loss variants differ from E1 in mean test Dice "
++                    "at the 95% level (paired bootstrap).")
++    rf.extend(f"{i + 1}. {x}" for i, x in enumerate(findings))
++    rf.append("")
++
++    if eff_df is not None:
++        rf.append("## 6. Efficiency\n")
++        rf.append(_md_table(eff_df.astype(object).where(eff_df.notna(), 'N/A'), floatfmt=4) + "\n")
++        rf.append("GPU latency: batch 1, 256×256, CUDA-synchronized median. The auxiliary losses are "
++                  "training-only, so all four models have identical inference cost. FLOPs count conv/linear "
++                  "layers only (the selective scan is not counted). CPU latency is N/A because the "
++                  "`mamba_ssm` kernels are CUDA-only.\n")
++
++    rf.append("## 7. Limitations\n")
++    rf.append("- **Single seed (42), single fold (0).** The test-Dice gaps between models (~0.01) are of the "
++              "same order as typical seed-to-seed variance; multi-seed runs are needed for firm conclusions.\n"
++              "- λ values are the config defaults (boundary 0.3, consistency 1.0); Stage B tuning results were "
++              "not used to select them.\n"
++              "- Model selection uses validation Dice only, which may favour region accuracy over boundary metrics.\n")
++    rf.append("See `failure_analysis.md` for failure modes and per-case changes.\n")
++    rf_path = os.path.join(out_dir, 'RESEARCH_FINDINGS.md')
++    with open(rf_path, 'w', encoding='utf-8') as f:
++        f.write('\n'.join(rf))
++    print(f"Saved: {rf_path}")
++
++
+ def find_checkpoint(checkpoints_root, exp_name, seed=42):
+     """Searches for best_model.pth or best_ema.pth under exp_name, either nested or direct."""
+     candidates = [
+@@ -451,6 +690,9 @@ def main():
+     args = parse_args()
+     device = torch.device(args.device)
+     out_dir = args.output_dir or os.path.join(args.checkpoints_root, 'final_deliverables')
++    if args.reports_only:
++        write_text_reports(out_dir, seed=args.seed)
++        return
+     os.makedirs(out_dir, exist_ok=True)
+ 
+     print(f"===========================================================")
+@@ -635,6 +877,8 @@ def main():
+             q_df.to_csv(q_csv)
+             print(f"Saved: {q_csv}")
+ 
++    write_text_reports(out_dir, seed=args.seed)
++
+     print("\n✅ All deliverables generated successfully!")
+ 
+ 
+diff --git a/losses/seg_losses.py b/losses/seg_losses.py
+index b956d48..d31f13c 100644
+--- a/losses/seg_losses.py
++++ b/losses/seg_losses.py
+@@ -1,3 +1,4 @@
++import random
+ import torch
+ import torch.nn as nn
+ import torch.nn.functional as F
+diff --git a/train.py b/train.py
+index 25f5657..4689d9c 100644
+--- a/train.py
++++ b/train.py
+@@ -561,7 +561,7 @@ def main():
+ 
+     # P2: speed settings
+     import os as _os
+-    num_workers = min(4, _os.cpu_count() or 2)
++    num_workers = int(_os.environ.get('NUM_WORKERS', min(4, _os.cpu_count() or 2)))
+     batch_size = cfg.get('batch_size', 8)
+     train_loader = DataLoader(
+         train_dataset, batch_size=batch_size, shuffle=True,
+@@ -614,7 +614,7 @@ def main():
+     if cfg.get('use_boundary_loss', False):
+         loss_modules['boundary'] = ScaleAwareBoundaryLoss(
+             boundary_mode=cfg.get('boundary_mode', 'from_mask'),
+-            r=2,
++            radius=2,
+             a_ref=cfg.get('boundary_a_ref', 0.05),
+             gamma=cfg.get('boundary_gamma', 0.5),
+             w_max=cfg.get('boundary_w_max', 4.0),
+diff --git a/utils/metrics.py b/utils/metrics.py
+index 9c043bb..ba48aed 100644
+--- a/utils/metrics.py
++++ b/utils/metrics.py
+@@ -432,18 +432,22 @@ def measure_model_efficiency(model, input_size=(1, 3, 256, 256), device='cuda',
+                 times.append(time.perf_counter() - t0)
+         gpu_latency_ms = float(np.median(times)) * 1000.0
+ 
+-    # CPU latency (always measured)
+-    model_cpu = model.to('cpu')
+-    dummy_cpu = torch.randn(*input_size, device='cpu')
+-    with torch.no_grad():
+-        for _ in range(10):
+-            _ = model_cpu(dummy_cpu)
+-        times_cpu = []
+-        for _ in range(50):
+-            t0 = time.perf_counter()
+-            _ = model_cpu(dummy_cpu)
+-            times_cpu.append(time.perf_counter() - t0)
+-    cpu_latency_ms = float(np.median(times_cpu)) * 1000.0
++    # CPU latency (skipped if the model uses CUDA-only kernels, e.g. mamba_ssm)
++    cpu_latency_ms = None
++    try:
++        model_cpu = model.to('cpu')
++        dummy_cpu = torch.randn(*input_size, device='cpu')
++        with torch.no_grad():
++            for _ in range(10):
++                _ = model_cpu(dummy_cpu)
++            times_cpu = []
++            for _ in range(50):
++                t0 = time.perf_counter()
++                _ = model_cpu(dummy_cpu)
++                times_cpu.append(time.perf_counter() - t0)
++        cpu_latency_ms = float(np.median(times_cpu)) * 1000.0
++    except RuntimeError as e:
++        print(f"[Efficiency] CPU latency not measured (CUDA-only kernel): {str(e).splitlines()[0]}")
+     model.to(device_obj)
+ 
+     result = {
+@@ -453,7 +457,7 @@ def measure_model_efficiency(model, input_size=(1, 3, 256, 256), device='cuda',
+         'flops_G':      round(flops_g, 4),
+         'latency_note': 'PyTorch parallel-scan fallback, batch 1, CUDA-synchronized, median of 200 runs after 50 warm-up',
+         'gpu_latency_ms': round(gpu_latency_ms, 2) if gpu_latency_ms else 'N/A',
+-        'cpu_latency_ms': round(cpu_latency_ms, 2),
++        'cpu_latency_ms': round(cpu_latency_ms, 2) if cpu_latency_ms is not None else 'N/A',
+     }
+ 
+     # Try mamba_ssm if importable (do not compile if it hangs)
