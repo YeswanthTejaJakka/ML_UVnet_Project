@@ -2,10 +2,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.ipynb_checkpoints/
-checkpoints/
-results/
-runs/
 *.zip
 *.tar.gz
 *.pdf
@@ -14,8 +10,3 @@ tn3k/
 .vscode/
 .idea/
 
-error.txt
-instructions.txt
-Update.txt
-AI512_Project_2024AIB1009.ipynb
-colab_runner_with_output.ipynb

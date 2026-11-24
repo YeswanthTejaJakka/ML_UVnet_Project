@@ -1,0 +1,5 @@
+model,small_dice,medium_dice,large_dice,small_biou,medium_biou,large_biou
+E1 Baseline (E1-R*),0.6367,0.7868,0.8414,0.4851,0.4972,0.4241
+E2 Boundary,0.6334,0.7725,0.8359,0.4945,0.4926,0.4207
+E3 Consistency,0.6371,0.7729,0.8303,0.4807,0.4775,0.4049
+E4 Combined,0.658,0.772,0.8269,0.5075,0.4909,0.4189

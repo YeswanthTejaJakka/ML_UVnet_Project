@@ -1,0 +1,49 @@
+delta_auc_obs,ci_lo,ci_hi,p_value_one_sided,supports_H1,corruption,model,test_type,levels_used,note,p_holm_corrected,significant_holm_0.05,delta_mean,significant_at_95,level,distribution
+-0.014123,-0.021748,-0.006499,0.9999,False,speckle,E2 Boundary,PRIMARY_AUC_retention,"[np.float64(0.05), np.float64(0.1), np.float64(0.15), np.float64(0.2), np.float64(0.25)]",Holm-corrected; H1: AUC(EX) > AUC(E1),1.0,False,,,,
+0.021257,0.012413,0.030166,0.0,True,speckle,E3 Consistency,PRIMARY_AUC_retention,"[np.float64(0.05), np.float64(0.1), np.float64(0.15), np.float64(0.2), np.float64(0.25)]",Holm-corrected; H1: AUC(EX) > AUC(E1),0.0,True,,,,
+0.023307,0.014501,0.032463,0.0,True,speckle,E4 Combined,PRIMARY_AUC_retention,"[np.float64(0.05), np.float64(0.1), np.float64(0.15), np.float64(0.2), np.float64(0.25)]",Holm-corrected; H1: AUC(EX) > AUC(E1),0.0,True,,,,
+-0.039803,-0.051843,-0.027742,1.0,False,gaussian,E2 Boundary,PRIMARY_AUC_retention,"[np.float64(0.05), np.float64(0.1), np.float64(0.15), np.float64(0.2)]",Holm-corrected; H1: AUC(EX) > AUC(E1),1.0,False,,,,
+0.133664,0.11963,0.147597,0.0,True,gaussian,E3 Consistency,PRIMARY_AUC_retention,"[np.float64(0.05), np.float64(0.1), np.float64(0.15), np.float64(0.2)]",Holm-corrected; H1: AUC(EX) > AUC(E1),0.0,True,,,,
+0.139454,0.125872,0.152601,0.0,True,gaussian,E4 Combined,PRIMARY_AUC_retention,"[np.float64(0.05), np.float64(0.1), np.float64(0.15), np.float64(0.2)]",Holm-corrected; H1: AUC(EX) > AUC(E1),0.0,True,,,,
+0.001869,-0.005887,0.009646,0.321,False,contrast,E2 Boundary,PRIMARY_AUC_retention,"[np.float64(0.3), np.float64(0.5), np.float64(0.75), np.float64(0.9)]",Holm-corrected; H1: AUC(EX) > AUC(E1),0.963,False,,,,
+0.019633,0.011106,0.028382,0.0,True,contrast,E3 Consistency,PRIMARY_AUC_retention,"[np.float64(0.3), np.float64(0.5), np.float64(0.75), np.float64(0.9)]",Holm-corrected; H1: AUC(EX) > AUC(E1),0.0,True,,,,
+0.022128,0.01265,0.032042,0.0,True,contrast,E4 Combined,PRIMARY_AUC_retention,"[np.float64(0.3), np.float64(0.5), np.float64(0.75), np.float64(0.9)]",Holm-corrected; H1: AUC(EX) > AUC(E1),0.0,True,,,,
+,-0.017385,0.000114,,,speckle,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.008586,False,0.05,in-distribution
+,-0.01576,0.001349,,,speckle,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.007194,False,0.05,in-distribution
+,-0.014152,0.005281,,,speckle,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.004553,False,0.05,in-distribution
+,-0.019016,-0.002645,,,speckle,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.010767,True,0.1,in-distribution
+,-0.005125,0.013488,,,speckle,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.004082,False,0.1,in-distribution
+,-0.002682,0.016355,,,speckle,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.00668,False,0.1,in-distribution
+,-0.02486,-0.007083,,,speckle,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.015895,True,0.15,in-distribution
+,0.00898,0.02855,,,speckle,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.018608,True,0.15,in-distribution
+,0.009649,0.029734,,,speckle,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.019516,True,0.15,in-distribution
+,-0.030849,-0.010991,,,speckle,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.02074,True,0.2,in-distribution
+,0.022397,0.043436,,,speckle,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.032798,True,0.2,in-distribution
+,0.023095,0.043873,,,speckle,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.033327,True,0.2,in-distribution
+,-0.024798,-0.004354,,,speckle,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.014629,True,0.25,interpolation
+,0.045379,0.070554,,,speckle,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.057989,True,0.25,interpolation
+,0.04978,0.073937,,,speckle,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.061564,True,0.25,interpolation
+,-0.027415,-0.007197,,,gaussian,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.017235,True,0.05,out-of-distribution
+,0.015692,0.038507,,,gaussian,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.027069,True,0.05,out-of-distribution
+,0.018013,0.039845,,,gaussian,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.028803,True,0.05,out-of-distribution
+,-0.040035,-0.011544,,,gaussian,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.025734,True,0.1,out-of-distribution
+,0.097653,0.130322,,,gaussian,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.113839,True,0.1,out-of-distribution
+,0.101997,0.132599,,,gaussian,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.117211,True,0.1,out-of-distribution
+,-0.065362,-0.028767,,,gaussian,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.047156,True,0.15,out-of-distribution
+,0.150275,0.18763,,,gaussian,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.169143,True,0.15,out-of-distribution
+,0.159809,0.196169,,,gaussian,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.17814,True,0.15,out-of-distribution
+,-0.088484,-0.049522,,,gaussian,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.069085,True,0.2,out-of-distribution
+,0.204465,0.244748,,,gaussian,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.224605,True,0.2,out-of-distribution
+,0.213062,0.25365,,,gaussian,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.233661,True,0.2,out-of-distribution
+,0.007044,0.029133,,,contrast,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.018175,True,0.3,extrapolation
+,0.059638,0.08838,,,contrast,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.073773,True,0.3,extrapolation
+,0.058055,0.086532,,,contrast,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.072045,True,0.3,extrapolation
+,-0.007481,0.010964,,,contrast,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.0018,False,0.5,in-distribution
+,0.007892,0.028504,,,contrast,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.018075,True,0.5,in-distribution
+,0.011029,0.033745,,,contrast,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,0.022293,True,0.5,in-distribution
+,-0.015135,0.003226,,,contrast,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.005909,False,0.75,in-distribution
+,-0.013918,0.003622,,,contrast,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.005079,False,0.75,in-distribution
+,-0.010937,0.00957,,,contrast,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.000721,False,0.75,in-distribution
+,-0.016041,0.002669,,,contrast,E2 Boundary,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.006591,False,0.9,in-distribution
+,-0.016623,0.000142,,,contrast,E3 Consistency,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.008235,False,0.9,in-distribution
+,-0.015064,0.00502,,,contrast,E4 Combined,EXPLORATORY_level,,Uncorrected; exploratory level-wise comparison vs E1,,,-0.005105,False,0.9,in-distribution

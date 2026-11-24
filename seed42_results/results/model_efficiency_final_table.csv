@@ -1,0 +1,5 @@
+model,inference_params_M,flops_G,latency_ms_batch1_gpu,fps_batch1,throughput_fps_batch16,cpu_latency_ms_median,cpu_fps_batch1,note,flops_note
+E1 Baseline (E1-R*),0.0495,0.06,66.187,15.1,29.5,45.64,21.9,"PyTorch PScan fallback, NOT mamba_ssm CUDA kernel",thop conv/linear only; mamba_ssm selective-scan NOT counted (convention-based lower bound)
+E2 Boundary,0.0495,0.06,46.766,21.4,33.9,42.99,23.3,"PyTorch PScan fallback, NOT mamba_ssm CUDA kernel",thop conv/linear only; mamba_ssm selective-scan NOT counted (convention-based lower bound)
+E3 Consistency,0.0495,0.06,43.829,22.8,31.6,42.95,23.3,"PyTorch PScan fallback, NOT mamba_ssm CUDA kernel",thop conv/linear only; mamba_ssm selective-scan NOT counted (convention-based lower bound)
+E4 Combined,0.0495,0.06,43.502,23.0,30.0,48.84,20.5,"PyTorch PScan fallback, NOT mamba_ssm CUDA kernel",thop conv/linear only; mamba_ssm selective-scan NOT counted (convention-based lower bound)

@@ -1,0 +1,5 @@
+model,inference_params_M,flops_G,latency_ms,cpu_latency_ms,fps
+E1 Baseline (E1-R*),0.0495,0.06,9.4,N/A,106.4
+E2 Boundary,0.0495,0.06,9.3,N/A,107.5
+E3 Consistency,0.0495,0.06,9.27,N/A,107.9
+E4 Combined,0.0495,0.06,9.49,N/A,105.4

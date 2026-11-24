@@ -1,0 +1,49 @@
+model,metric,stored,recomputed,abs_diff,tolerance,result
+E1 Baseline (E1-R*),test_dice,0.7775,0.777512,1.2e-05,0.0001,PASS
+E1 Baseline (E1-R*),test_iou,0.6732,0.673178,2.2e-05,0.0001,PASS
+E1 Baseline (E1-R*),biou_d7,0.4655,0.465546,4.6e-05,0.0001,PASS
+E1 Baseline (E1-R*),biou_d2,0.1768,0.176824,2.4e-05,0.0001,PASS
+E1 Baseline (E1-R*),bf1,0.3611,0.361031,6.9e-05,0.0005,PASS
+E1 Baseline (E1-R*),hd95_px,27.56,27.562563,0.002563,2.0,PASS
+E1 Baseline (E1-R*),small_dice,0.6367,0.636649,5.1e-05,0.0001,PASS
+E1 Baseline (E1-R*),small_biou,0.4851,0.48511,1e-05,0.0001,PASS
+E1 Baseline (E1-R*),medium_dice,0.7868,0.786747,5.3e-05,0.0001,PASS
+E1 Baseline (E1-R*),medium_biou,0.4972,0.49725,5e-05,0.0001,PASS
+E1 Baseline (E1-R*),large_dice,0.8414,0.84141,1e-05,0.0001,PASS
+E1 Baseline (E1-R*),large_biou,0.4241,0.424087,1.3e-05,0.0001,PASS
+E2 Boundary,test_dice,0.769,0.769036,3.6e-05,0.0001,PASS
+E2 Boundary,test_iou,0.6659,0.665867,3.3e-05,0.0001,PASS
+E2 Boundary,biou_d7,0.4643,0.464275,2.5e-05,0.0001,PASS
+E2 Boundary,biou_d2,0.1849,0.184853,4.7e-05,0.0001,PASS
+E2 Boundary,bf1,0.3732,0.373163,3.7e-05,0.0005,PASS
+E2 Boundary,hd95_px,28.05,28.045867,0.004133,2.0,PASS
+E2 Boundary,small_dice,0.6334,0.633426,2.6e-05,0.0001,PASS
+E2 Boundary,small_biou,0.4945,0.494495,5e-06,0.0001,PASS
+E2 Boundary,medium_dice,0.7725,0.772479,2.1e-05,0.0001,PASS
+E2 Boundary,medium_biou,0.4926,0.492531,6.9e-05,0.0001,PASS
+E2 Boundary,large_dice,0.8359,0.835931,3.1e-05,0.0001,PASS
+E2 Boundary,large_biou,0.4207,0.420701,1e-06,0.0001,PASS
+E3 Consistency,test_dice,0.7677,0.767705,5e-06,0.0001,PASS
+E3 Consistency,test_iou,0.6602,0.660164,3.6e-05,0.0001,PASS
+E3 Consistency,biou_d7,0.4492,0.449176,2.4e-05,0.0001,PASS
+E3 Consistency,biou_d2,0.1656,0.165625,2.5e-05,0.0001,PASS
+E3 Consistency,bf1,0.3393,0.339323,2.3e-05,0.0005,PASS
+E3 Consistency,hd95_px,28.54,28.536677,0.003323,2.0,PASS
+E3 Consistency,small_dice,0.6371,0.637055,4.5e-05,0.0001,PASS
+E3 Consistency,small_biou,0.4807,0.480665,3.5e-05,0.0001,PASS
+E3 Consistency,medium_dice,0.7729,0.772869,3.1e-05,0.0001,PASS
+E3 Consistency,medium_biou,0.4775,0.47745,5e-05,0.0001,PASS
+E3 Consistency,large_dice,0.8303,0.830329,2.9e-05,0.0001,PASS
+E3 Consistency,large_biou,0.4049,0.404924,2.4e-05,0.0001,PASS
+E4 Combined,test_dice,0.7703,0.770311,1.1e-05,0.0001,PASS
+E4 Combined,test_iou,0.6653,0.665264,3.6e-05,0.0001,PASS
+E4 Combined,biou_d7,0.4656,0.465595,5e-06,0.0001,PASS
+E4 Combined,biou_d2,0.1834,0.183401,1e-06,0.0001,PASS
+E4 Combined,bf1,0.3729,0.372841,5.9e-05,0.0005,PASS
+E4 Combined,hd95_px,29.16,29.161734,0.001734,2.0,PASS
+E4 Combined,small_dice,0.658,0.657947,5.3e-05,0.0001,PASS
+E4 Combined,small_biou,0.5075,0.507495,5e-06,0.0001,PASS
+E4 Combined,medium_dice,0.772,0.771962,3.8e-05,0.0001,PASS
+E4 Combined,medium_biou,0.4909,0.490873,2.7e-05,0.0001,PASS
+E4 Combined,large_dice,0.8269,0.826927,2.7e-05,0.0001,PASS
+E4 Combined,large_biou,0.4189,0.418907,7e-06,0.0001,PASS

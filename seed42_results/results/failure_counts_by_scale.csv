@@ -1,0 +1,17 @@
+model,category,n_total,n_failures,n_missed,failure_rate_%
+E1 Baseline (E1-R*),small,127,33,6,26.0
+E1 Baseline (E1-R*),medium,242,16,0,6.6
+E1 Baseline (E1-R*),large,245,10,0,4.1
+E1 Baseline (E1-R*),all,614,59,6,9.6
+E2 Boundary,small,127,34,8,26.8
+E2 Boundary,medium,242,21,2,8.7
+E2 Boundary,large,245,11,0,4.5
+E2 Boundary,all,614,66,10,10.7
+E3 Consistency,small,127,36,7,28.3
+E3 Consistency,medium,242,23,0,9.5
+E3 Consistency,large,245,14,0,5.7
+E3 Consistency,all,614,73,7,11.9
+E4 Combined,small,127,31,5,24.4
+E4 Combined,medium,242,21,0,8.7
+E4 Combined,large,245,16,1,6.5
+E4 Combined,all,614,68,6,11.1

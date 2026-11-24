@@ -1,0 +1,10 @@
+model,scale,n,delta_dice_mean,ci95_lo,ci95_hi,significant_at_95,note
+E2 Boundary,small,127,-0.003223,-0.02501,0.019301,False,EXPLORATORY post-hoc subgroup; uncorrected
+E3 Consistency,small,127,0.000406,-0.025363,0.025532,False,EXPLORATORY post-hoc subgroup; uncorrected
+E4 Combined,small,127,0.021299,-0.002679,0.046377,False,EXPLORATORY post-hoc subgroup; uncorrected
+E2 Boundary,medium,242,-0.014268,-0.030135,0.000192,False,EXPLORATORY post-hoc subgroup; uncorrected
+E3 Consistency,medium,242,-0.013878,-0.02555,-0.002548,True,EXPLORATORY post-hoc subgroup; uncorrected
+E4 Combined,medium,242,-0.014785,-0.02998,-0.000436,True,EXPLORATORY post-hoc subgroup; uncorrected
+E2 Boundary,large,245,-0.005479,-0.01953,0.00819,False,EXPLORATORY post-hoc subgroup; uncorrected
+E3 Consistency,large,245,-0.011081,-0.022201,-2.6e-05,True,EXPLORATORY post-hoc subgroup; uncorrected
+E4 Combined,large,245,-0.014483,-0.030617,0.000773,False,EXPLORATORY post-hoc subgroup; uncorrected

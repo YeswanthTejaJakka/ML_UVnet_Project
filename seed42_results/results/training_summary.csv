@@ -1,0 +1,5 @@
+experiment,n_runs,best_val_dice_mean,best_val_dice_std,best_epoch_mean,best_val_iou_mean,final_train_loss,final_train_val_gap,mean_epoch_time_s
+E1 Baseline (E1-R*),1,0.7533,0.0,175.0,0.6456,0.7821,0.0979,10.7
+E2 Boundary,1,0.7522,0.0,199.0,0.6428,1.0234,0.0985,10.8
+E3 Consistency,1,0.7539,0.0,185.0,0.643,0.8293,0.0948,16.1
+E4 Combined,1,0.7587,0.0,184.0,0.6506,1.0553,0.0913,16.5

@@ -1,0 +1,5 @@
+timestamp,exp_name,seed,epochs,batch_size,lr,best_val_dice,save_dir,code_version
+2026-11-10 02:39:09,e1_baseline,42,200,16,0.001,0.7533,/root/Yeshwanth/checkpoints/e1_baseline/seed42,24e8160e62f3
+2026-11-10 03:15:56,e2_boundary,42,200,16,0.001,0.7522,/root/Yeshwanth/checkpoints/e2_boundary/seed42,24e8160e62f3
+2026-11-10 04:10:16,e3_consistency,42,200,16,0.001,0.7539,/root/Yeshwanth/checkpoints/e3_consistency/seed42,24e8160e62f3
+2026-11-10 05:05:57,e4_combined,42,200,16,0.001,0.7587,/root/Yeshwanth/checkpoints/e4_combined/seed42,24e8160e62f3

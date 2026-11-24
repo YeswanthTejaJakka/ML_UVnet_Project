@@ -1,0 +1,85 @@
+corruption,level,distribution,model,dice_mean,dice_std,biou_d7_mean,biou_d7_std,hd95_mean,small_dice_mean,empty_pred_rate
+speckle,0.0,clean,E1 Baseline (E1-R*),0.77751,0.0,0.46555,0.0,27.563,0.63665,0.0
+speckle,0.0,clean,E2 Boundary,0.76904,0.0,0.46428,0.0,28.046,0.63343,0.0
+speckle,0.0,clean,E3 Consistency,0.76771,0.0,0.44918,0.0,28.537,0.63706,0.0
+speckle,0.0,clean,E4 Combined,0.77031,0.0,0.4656,0.0,29.162,0.65795,0.0
+speckle,0.05,in-distribution,E1 Baseline (E1-R*),0.77458,0.00081,0.46543,0.00079,,0.6416,0.0
+speckle,0.05,in-distribution,E2 Boundary,0.76599,0.00097,0.46258,0.00119,,0.63953,0.00271
+speckle,0.05,in-distribution,E3 Consistency,0.76738,0.00077,0.44919,0.00132,,0.63882,0.0
+speckle,0.05,in-distribution,E4 Combined,0.77002,0.0005,0.46436,0.00035,,0.65619,0.0
+speckle,0.1,in-distribution,E1 Baseline (E1-R*),0.76338,0.00462,0.45985,0.00248,29.546,0.64394,0.00326
+speckle,0.1,in-distribution,E2 Boundary,0.75261,0.00131,0.45227,0.002,29.679,0.64816,0.00217
+speckle,0.1,in-distribution,E3 Consistency,0.76746,0.00278,0.44838,0.00248,28.768,0.63869,0.0
+speckle,0.1,in-distribution,E4 Combined,0.77006,0.00204,0.46423,0.00201,29.186,0.65756,0.00054
+speckle,0.15,in-distribution,E1 Baseline (E1-R*),0.7475,0.00448,0.44857,0.00133,29.773,0.64689,0.0038
+speckle,0.15,in-distribution,E2 Boundary,0.73161,0.00226,0.43367,0.00194,30.588,0.64286,0.00543
+speckle,0.15,in-distribution,E3 Consistency,0.76611,0.00224,0.44653,0.0006,28.523,0.64379,0.0
+speckle,0.15,in-distribution,E4 Combined,0.76702,0.00323,0.45978,0.00226,28.885,0.65518,0.0
+speckle,0.2,in-distribution,E1 Baseline (E1-R*),0.72955,0.00144,0.43154,0.00202,30.354,0.63449,0.0038
+speckle,0.2,in-distribution,E2 Boundary,0.70881,0.0027,0.4138,0.00108,34.777,0.63067,0.00597
+speckle,0.2,in-distribution,E3 Consistency,0.76235,0.00057,0.44306,0.00056,28.59,0.63903,0.00054
+speckle,0.2,in-distribution,E4 Combined,0.76288,0.00073,0.45496,0.00061,28.437,0.64746,0.00054
+speckle,0.25,interpolation,E1 Baseline (E1-R*),0.70033,0.00346,0.4081,0.00224,35.433,0.61706,0.01031
+speckle,0.25,interpolation,E2 Boundary,0.6857,0.0013,0.39307,0.00043,36.927,0.61228,0.00869
+speckle,0.25,interpolation,E3 Consistency,0.75832,0.00087,0.43907,0.00182,28.593,0.6376,0.00054
+speckle,0.25,interpolation,E4 Combined,0.7619,0.00249,0.45205,0.00191,28.868,0.64792,0.0
+gaussian,0.0,clean,E1 Baseline (E1-R*),0.77751,0.0,0.46555,0.0,27.563,0.63665,0.0
+gaussian,0.0,clean,E2 Boundary,0.76904,0.0,0.46428,0.0,28.046,0.63343,0.0
+gaussian,0.0,clean,E3 Consistency,0.76771,0.0,0.44918,0.0,28.537,0.63706,0.0
+gaussian,0.0,clean,E4 Combined,0.77031,0.0,0.4656,0.0,29.162,0.65795,0.0
+gaussian,0.05,out-of-distribution,E1 Baseline (E1-R*),0.73514,0.00204,0.44034,0.00193,32.078,0.65279,0.00651
+gaussian,0.05,out-of-distribution,E2 Boundary,0.7179,0.00312,0.4291,0.00206,33.915,0.64247,0.00869
+gaussian,0.05,out-of-distribution,E3 Consistency,0.7622,0.00165,0.4453,0.00094,29.321,0.64574,0.00054
+gaussian,0.05,out-of-distribution,E4 Combined,0.76394,0.00101,0.45821,0.00207,28.638,0.66141,0.00054
+gaussian,0.1,out-of-distribution,E1 Baseline (E1-R*),0.62252,0.00398,0.36228,0.00407,45.12,0.59258,0.02009
+gaussian,0.1,out-of-distribution,E2 Boundary,0.59679,0.00872,0.34188,0.00861,50.231,0.53528,0.03692
+gaussian,0.1,out-of-distribution,E3 Consistency,0.73636,0.00249,0.42032,0.00122,32.358,0.61834,0.00109
+gaussian,0.1,out-of-distribution,E4 Combined,0.73973,0.00121,0.42907,0.00117,31.987,0.622,0.00054
+gaussian,0.15,out-of-distribution,E1 Baseline (E1-R*),0.53052,0.00121,0.30499,0.002,57.212,0.53811,0.03257
+gaussian,0.15,out-of-distribution,E2 Boundary,0.48336,0.00265,0.26373,0.00238,74.063,0.44018,0.10586
+gaussian,0.15,out-of-distribution,E3 Consistency,0.69966,0.00309,0.38348,0.00202,35.833,0.56614,0.00217
+gaussian,0.15,out-of-distribution,E4 Combined,0.70866,0.00352,0.39632,0.00231,34.351,0.56152,0.00054
+gaussian,0.2,out-of-distribution,E1 Baseline (E1-R*),0.4368,0.00818,0.25019,0.00515,73.12,0.44517,0.07058
+gaussian,0.2,out-of-distribution,E2 Boundary,0.36771,0.00584,0.19402,0.00223,117.032,0.29448,0.22421
+gaussian,0.2,out-of-distribution,E3 Consistency,0.6614,0.00093,0.34709,0.00211,39.584,0.49905,0.00271
+gaussian,0.2,out-of-distribution,E4 Combined,0.67046,0.00332,0.35142,0.00149,38.417,0.49286,0.0
+contrast,0.3,extrapolation,E1 Baseline (E1-R*),0.67495,0.0,0.3622,0.0,42.261,0.49977,0.00163
+contrast,0.3,extrapolation,E2 Boundary,0.69312,0.0,0.38489,0.0,38.753,0.52757,0.0
+contrast,0.3,extrapolation,E3 Consistency,0.74872,0.0,0.42725,0.0,31.48,0.59619,0.0
+contrast,0.3,extrapolation,E4 Combined,0.74699,0.0,0.43984,0.0,31.767,0.6129,0.0
+contrast,0.5,in-distribution,E1 Baseline (E1-R*),0.74158,0.0,0.43031,0.0,32.794,0.58025,0.0
+contrast,0.5,in-distribution,E2 Boundary,0.74338,0.0,0.43547,0.0,31.709,0.59867,0.0
+contrast,0.5,in-distribution,E3 Consistency,0.75966,0.0,0.44134,0.0,30.257,0.61705,0.0
+contrast,0.5,in-distribution,E4 Combined,0.76388,0.0,0.46055,0.0,29.933,0.65439,0.0
+contrast,0.75,in-distribution,E1 Baseline (E1-R*),0.77053,0.0,0.45969,0.0,28.698,0.61932,0.0
+contrast,0.75,in-distribution,E2 Boundary,0.76462,0.0,0.45808,0.0,29.096,0.63253,0.0
+contrast,0.75,in-distribution,E3 Consistency,0.76545,0.0,0.44818,0.0,29.16,0.63086,0.0
+contrast,0.75,in-distribution,E4 Combined,0.76981,0.0,0.4659,0.0,29.572,0.66248,0.0
+contrast,0.9,in-distribution,E1 Baseline (E1-R*),0.77527,0.0,0.46413,0.0,28.281,0.62991,0.0
+contrast,0.9,in-distribution,E2 Boundary,0.76868,0.0,0.46384,0.0,28.279,0.63469,0.0
+contrast,0.9,in-distribution,E3 Consistency,0.76703,0.0,0.44947,0.0,28.693,0.6353,0.0
+contrast,0.9,in-distribution,E4 Combined,0.77016,0.0,0.46626,0.0,29.326,0.65948,0.0
+contrast,1.0,clean,E1 Baseline (E1-R*),0.77751,0.0,0.46555,0.0,27.563,0.63665,0.0
+contrast,1.0,clean,E2 Boundary,0.76904,0.0,0.46428,0.0,28.046,0.63343,0.0
+contrast,1.0,clean,E3 Consistency,0.76771,0.0,0.44918,0.0,28.537,0.63706,0.0
+contrast,1.0,clean,E4 Combined,0.77031,0.0,0.4656,0.0,29.162,0.65795,0.0
+combined,0.0,in-distribution,E1 Baseline (E1-R*),0.73252,0.00262,0.43599,0.00316,32.6,0.62193,0.0076
+combined,0.0,in-distribution,E2 Boundary,0.71298,0.0021,0.42114,0.0017,35.086,0.62373,0.00597
+combined,0.0,in-distribution,E3 Consistency,0.76427,0.00109,0.44661,0.00088,28.504,0.63865,0.00054
+combined,0.0,in-distribution,E4 Combined,0.76481,0.00043,0.46076,0.00108,29.022,0.65508,0.0
+poisson,15.0,out-of-distribution,E1 Baseline (E1-R*),0.60352,0.00254,0.33765,0.00103,44.93,0.57113,0.019
+poisson,15.0,out-of-distribution,E2 Boundary,0.58553,0.00409,0.32566,0.00267,50.599,0.50571,0.03637
+poisson,15.0,out-of-distribution,E3 Consistency,0.73144,0.00234,0.41151,0.00191,31.165,0.60396,0.0
+poisson,15.0,out-of-distribution,E4 Combined,0.72963,0.00146,0.41419,0.0027,31.999,0.58938,0.0
+poisson,30.0,out-of-distribution,E1 Baseline (E1-R*),0.67094,0.00388,0.38967,0.00253,38.562,0.6183,0.01303
+poisson,30.0,out-of-distribution,E2 Boundary,0.65467,0.00477,0.37674,0.00329,42.107,0.59907,0.019
+poisson,30.0,out-of-distribution,E3 Consistency,0.74971,0.00156,0.43215,0.00163,29.527,0.63363,0.00054
+poisson,30.0,out-of-distribution,E4 Combined,0.74739,0.00045,0.438,0.00098,30.299,0.62812,0.00054
+poisson,60.0,out-of-distribution,E1 Baseline (E1-R*),0.71869,0.00222,0.42447,0.00069,32.859,0.63943,0.00543
+poisson,60.0,out-of-distribution,E2 Boundary,0.70095,0.00438,0.41398,0.00247,34.296,0.63631,0.00814
+poisson,60.0,out-of-distribution,E3 Consistency,0.75988,0.00107,0.44003,0.00146,29.292,0.64116,0.00109
+poisson,60.0,out-of-distribution,E4 Combined,0.75924,0.00101,0.45405,0.00274,28.822,0.65139,0.00109
+poisson,255.0,out-of-distribution,E1 Baseline (E1-R*),0.7647,0.00144,0.46161,0.00308,28.462,0.64677,0.00109
+poisson,255.0,out-of-distribution,E2 Boundary,0.74723,0.00117,0.45113,0.00164,29.242,0.648,0.00434
+poisson,255.0,out-of-distribution,E3 Consistency,0.76655,0.00133,0.44856,0.00052,29.302,0.6437,0.0
+poisson,255.0,out-of-distribution,E4 Combined,0.77016,0.00068,0.46534,0.00018,28.928,0.66262,0.00054
